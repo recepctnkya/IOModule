@@ -105,6 +105,7 @@ esp_adc_cal_characteristics_t adc_chars;
 #define RGB_GPIO 37
 #define LED_NUM 65  
 #define RGB_RELAY 36
+#define LED2_PIN 35
 
 static uint8_t led_state_off = 0;
 CRGB* ws2812_buffer;
@@ -168,14 +169,14 @@ void app_rgb(void *arg) {
             if (led_state_off) ws2812_buffer[i] = (CRGB){.r=0, .g=0, .b=0};
             else ws2812_buffer[i] = (CRGB){.r=get_g_value(), .g=get_r_value(), .b=get_b_value()};
         }
-        ESP_LOGI(TAG, "Updating RGB LEDs with values: R=%d, G=%d, B=%d", get_r_value(), get_g_value(), get_b_value());
+        //ESP_LOGI(TAG, "Updating RGB LEDs with values: R=%d, G=%d, B=%d", get_r_value(), get_g_value(), get_b_value());
         ESP_ERROR_CHECK_WITHOUT_ABORT(ws28xx_update());
         vTaskDelay(pdMS_TO_TICKS(100));
 
         if(get_rgb_enable() == 1) {
-            gpio_set_level(RGB_RELAY, 1);
+            led_state_off = 0;
         } else {
-            gpio_set_level(RGB_RELAY, 0);
+            led_state_off = 1;
         }
     }
 }
@@ -294,6 +295,7 @@ void toggle_led_task(void *arg)
     }
 }
 
+
 static void shift_register_write(uint16_t value)
 {
     // Send bits MSB first for two 74HC4094 chips
@@ -343,11 +345,12 @@ void shift_register_task(void *arg)
 
 #define LEDC_TIMER              LEDC_TIMER_0
 #define LEDC_MODE               LEDC_LOW_SPEED_MODE
-#define LEDC_CHANNEL            LEDC_CHANNEL_0
+#define LEDC_CHANNEL_RGB        LEDC_CHANNEL_0
+#define LEDC_CHANNEL_LED2       LEDC_CHANNEL_1
 #define LEDC_DUTY_RES           LEDC_TIMER_10_BIT // 10-bit resolution (0-1023)
 #define LEDC_FREQUENCY          5000              // 5 kHz
 
-// PWM fade task
+// PWM control task using dimmable outputs
 void rgb_pwm_task(void *pvParameters)
 {
     // Timer configuration
@@ -360,31 +363,47 @@ void rgb_pwm_task(void *pvParameters)
     };
     ESP_ERROR_CHECK(ledc_timer_config(&ledc_timer));
 
-    // Channel configuration
-    ledc_channel_config_t ledc_channel = {
+    // RGB_RELAY channel configuration (dimmable_outputs[0])
+    ledc_channel_config_t ledc_channel_rgb = {
         .speed_mode     = LEDC_MODE,
-        .channel        = LEDC_CHANNEL,
+        .channel        = LEDC_CHANNEL_RGB,
         .timer_sel      = LEDC_TIMER,
         .intr_type      = LEDC_INTR_DISABLE,
         .gpio_num       = RGB_RELAY,
         .duty           = 0, // Initially off
         .hpoint         = 0
     };
-    ESP_ERROR_CHECK(ledc_channel_config(&ledc_channel));
+    ESP_ERROR_CHECK(ledc_channel_config(&ledc_channel_rgb));
 
-    // Fade service
-    ledc_fade_func_install(0);
+    // LED2_PIN channel configuration (dimmable_outputs[1])
+    ledc_channel_config_t ledc_channel_led2 = {
+        .speed_mode     = LEDC_MODE,
+        .channel        = LEDC_CHANNEL_LED2,
+        .timer_sel      = LEDC_TIMER,
+        .intr_type      = LEDC_INTR_DISABLE,
+        .gpio_num       = LED2_PIN,
+        .duty           = 0, // Initially off
+        .hpoint         = 0
+    };
+    ESP_ERROR_CHECK(ledc_channel_config(&ledc_channel_led2));
 
     while (1) {
-        // Fade in
-        ESP_ERROR_CHECK(ledc_set_fade_time_and_start(
-            LEDC_MODE, LEDC_CHANNEL, 1023, 1000, LEDC_FADE_NO_WAIT));
-        vTaskDelay(pdMS_TO_TICKS(1000));
-
-        // Fade out
-        ESP_ERROR_CHECK(ledc_set_fade_time_and_start(
-            LEDC_MODE, LEDC_CHANNEL, 0, 1000, LEDC_FADE_NO_WAIT));
-        vTaskDelay(pdMS_TO_TICKS(1000));
+        // Get dimmable output values (0-255) and convert to PWM duty (0-1023)
+        uint32_t rgb_duty = (get_dimmable_output(0) * 1023) / 255;  // RGB_RELAY from dimmable_outputs[0]
+        uint32_t led2_duty = (get_dimmable_output(1) * 1023) / 255; // LED2_PIN from dimmable_outputs[1]
+        
+        // Set PWM duty for RGB_RELAY
+        ESP_ERROR_CHECK(ledc_set_duty(LEDC_MODE, LEDC_CHANNEL_RGB, rgb_duty));
+        ESP_ERROR_CHECK(ledc_update_duty(LEDC_MODE, LEDC_CHANNEL_RGB));
+        
+        // Set PWM duty for LED2_PIN
+        ESP_ERROR_CHECK(ledc_set_duty(LEDC_MODE, LEDC_CHANNEL_LED2, led2_duty));
+        ESP_ERROR_CHECK(ledc_update_duty(LEDC_MODE, LEDC_CHANNEL_LED2));
+        
+        // ESP_LOGI(TAG, "PWM Update - RGB_RELAY: %d/255 (duty: %"PRIu32"/1023), LED2_PIN: %d/255 (duty: %"PRIu32"/1023)", 
+        //          get_dimmable_output(0), rgb_duty, get_dimmable_output(1), led2_duty);
+        
+        vTaskDelay(pdMS_TO_TICKS(100)); // Update every 100ms
     }
 }
 
@@ -428,17 +447,42 @@ void analog_main_task(void *arg) {
 }
 
 void dht_task(void *pvParameters) {
-    dht_init(6);  // Initialize DHT on GPIO4
+    // Initialize both DHT sensors
+    //dht_init(6);  // Initialize DHT on GPIO6
+    dht_init(7);  // Initialize DHT on GPIO7
     
     while(1) {
-        float temp, hum;
-        int result = dht_read_data(&temp, &hum);
+        float temp1, hum1, temp2, hum2;
+        int result1, result2;
         
-        if(result == 0) {
-            ESP_LOGI("DHT", "Temperature: %.1fC, Humidity: %.1f%%", temp, hum);
+        // Read DHT sensor on GPIO6 first
+        //result1 = dht_read_data_gpio(6, &temp1, &hum1);
+        
+        // Add delay between readings to avoid conflicts
+        vTaskDelay(pdMS_TO_TICKS(1000));
+        
+        // Read DHT sensor on GPIO7
+        result2 = dht_read_data_gpio(7, &temp2, &hum2);
+        
+        // // Log results for GPIO6
+        // if(result1 == 0) {
+        //     ESP_LOGI("DHT", "Sensor GPIO6 - Temperature: %.1fC, Humidity: %.1f%%", temp1, hum1);
+        // } else {
+        //     ESP_LOGE("DHT", "Sensor GPIO6 - Error reading sensor: %d", result1);
+        //     temp1 = 0; // Set to 0 if error
+        // }
+        temp1 = 0; // Set to 0 if error
+        // Log results for GPIO7
+        if(result2 == 0) {
+            //ESP_LOGI("DHT", "Sensor GPIO7 - Temperature: %.1fC, Humidity: %.1f%%", temp2, hum2);
+            // Update analog inputs with sensor data (water levels will be updated by ADC monitor)
+            
         } else {
-            ESP_LOGE("DHT", "Error reading sensor: %d", result);
+            //ESP_LOGE("DHT", "Sensor GPIO7 - Error reading sensor: %d", result2);
+            temp2 = 0; // Set to 0 if error
         }
+        update_analog_inputs(temp1, temp2, 0, 0); // Water levels will be updated separately
+
         
         vTaskDelay(pdMS_TO_TICKS(2000));
     }
@@ -477,8 +521,7 @@ void app_main(void)
     };
     gpio_config(&io_conf);
 
-
-
+ 
 
 
 
@@ -562,17 +605,18 @@ void app_main(void)
     waveshare_twai_init(); // Initialize the Waveshare TWAI module 
     xTaskCreate(send_frames_task, "send_frames_task", 4096, NULL, 5, NULL);
     xTaskCreate(receive_frames_task, "receive_frames_task", 4096, NULL, 5, NULL);
+    xTaskCreate(can_watchdog_task, "can_watchdog_task", 4096, NULL, 6, NULL); // Higher priority for watchdog
     xTaskCreate(toggle_led_task, "toggle_led_task", 2048, NULL, 5, NULL);
     xTaskCreate(shift_register_task, "shift_register_task", 2048, NULL, 5, NULL);
     //xTaskCreate(smooth_dim_task, "smooth_dim_task", 4096, NULL, 5, NULL);
     xTaskCreate(app_rgb, "rbg_", 4096, NULL, 5, NULL);
     //xTaskCreate(analog_main_task, "analog_", 4096, NULL, 5, NULL);
-    //adc_monitor_init();
-    //xTaskCreate(adc_monitor_task, "adc_monitor_task", 4096, NULL, 5, NULL);
+    adc_monitor_init();
+    xTaskCreate(adc_monitor_task, "adc_monitor_task", 4096, NULL, 5, NULL);
     //xTaskCreate(read_input_task, "DI_", 4096, NULL, 5, NULL);
        
     xTaskCreate(dht_task, "dht_task", 4096, NULL, 5, NULL); 
-    xTaskCreate(rgb_pwm_task, "rgb_pwm_task", 2048, NULL, 5, NULL);  
+    xTaskCreate(rgb_pwm_task, "rgb_pwm_task", 4096, NULL, 5, NULL);  
 
     //i2c_scan();
 }

@@ -37,6 +37,10 @@ void send_can_frame(uint32_t id, uint8_t *data); // Send a CAN frame via TWAI
 void populate_frame_2(uint8_t analog_inputs[4], uint8_t dimmable_outputs[4]); // Populate frame 2 data
 void populate_frame_3(uint8_t r, uint8_t g, uint8_t b); // Populate frame 3 data
 void populate_frame_1(uint16_t voltage, uint16_t outputs, uint16_t inputs); // Populate frame 1 data
+void handle_rx_message(twai_message_t message); // Handle received CAN messages
+void can_watchdog_task(void *pvParameter); // Watchdog task for CAN monitoring
+void update_analog_inputs(float dht1_temp, float dht2_temp, int waterlevel1, int waterlevel2); // Update analog inputs with sensor data
+void update_water_levels_only(int waterlevel1, int waterlevel2); // Update only water levels while preserving temperature values
 void set_framedata(uint8_t frame_id, uint8_t *data, size_t len); // Set frame data
 
 // Getter functions for RGB values
@@ -44,6 +48,7 @@ uint8_t get_r_value();
 uint8_t get_g_value();
 uint8_t get_b_value();
 uint8_t get_rgb_enable(); // Get RGB enable flag
-uint16_t get_outputs(); // Get outputs value
+uint16_t get_outputs();
+uint8_t get_dimmable_output(uint8_t index); // Get outputs value
 
 #endif // End of header guard 

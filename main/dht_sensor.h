@@ -9,6 +9,7 @@ extern "C" {
 
 void dht_init(int gpio_pin);
 int dht_read_data(float *temperature, float *humidity);
+int dht_read_data_gpio(int gpio_pin, float *temperature, float *humidity);
 
 #ifdef __cplusplus
 }

@@ -1,0 +1,12 @@
+-Sicaklik sensor soketlerine gnd ekleenecek
+-Sicaklik sensorunun analog okuma devresi duzenlenecek
+-Rgb okuma entegresi guncellenecek.
+-reset butonu ekleenecek
+-ftdi devresi guncellenecek
+-dim devresi ekleenecek
+-su seviye devresi cozunurlik arttirilacak
+-analog sayisi 1 tane arttirilacak
+-buton devresi eklenecek. ledli
+-5v guc devresi eklenecek rgb icin
+-3v3 beslemesi sicaklik sensorleri icin eklenecek.
+-su sensorleri 12v uzerinden olmamali. cunku giris voltaji her zaman degisiyor.

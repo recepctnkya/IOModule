@@ -4,6 +4,7 @@
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "waveshare_twai_port.h"
 
 #define TAG "ADC_MONITOR"
 
@@ -13,11 +14,11 @@
 #define BATTERY_REF_VOLTAGE   12000  // 12.0 V in mV
 #define WATERLEVEL_BUF_SIZE 100
 // Calibration points for water level % mapping
-#define SENSOR1_RAW_AT_0PCT    3160
-#define SENSOR1_RAW_AT_100PCT  3190
+#define SENSOR1_RAW_AT_0PCT    3181
+#define SENSOR1_RAW_AT_100PCT  3213
 
-#define SENSOR2_RAW_AT_0PCT    3161
-#define SENSOR2_RAW_AT_100PCT  3191
+#define SENSOR2_RAW_AT_0PCT    3182
+#define SENSOR2_RAW_AT_100PCT  3216
 
 #define ADC_SAMPLE_COUNT      100
 static int waterLevel1_buf[WATERLEVEL_BUF_SIZE] = {0};
@@ -112,8 +113,8 @@ void adc_monitor_task(void *param)
         int voltage_offset = 0;
 
         int raw0 = read_adc1_avg(ADC1_SENSOR_CH0);
-        int raw1 = read_adc1_avg(ADC1_SENSOR_CH1);
-        ESP_LOGI(TAG, "Raw ADC values - Sensor 0: %d, Sensor 1: %d", raw0, raw1);
+        int raw1 = read_adc2_avg(ADC1_SENSOR_CH1);
+
 
         waterLevel1 = calculate_percentage_water_level_1(raw0, voltage_offset);
         waterLevel2 = calculate_percentage_water_level_2(raw1, voltage_offset);
@@ -125,9 +126,13 @@ void adc_monitor_task(void *param)
 
         get_average_water_levels(&waterLevel1, &waterLevel2);
 
-
-        ESP_LOGI(TAG, "Battery voltage: %.2f V | Water Level 1: %d%% | Water Level 2: %d%%",
-                 voltage, waterLevel1, waterLevel2);
+        //ESP_LOGI(TAG, "Raw ADC values - Sensor 0: %d, Sensor 1: %d , Battery voltage: %.2f V | Water Level 1: %d%% | Water Level 2: %d%%", raw0, raw1,  voltage, waterLevel1, waterLevel2);
+        // ESP_LOGI(TAG, "Battery voltage: %.2f V | Water Level 1: %d%% | Water Level 2: %d%%",
+        //          voltage, waterLevel1, waterLevel2);
+        
+        // Update analog inputs with water level data
+        update_water_levels_only(waterLevel1, waterLevel2); // DHT temps will be updated by DHT task
+        
         vTaskDelay(pdMS_TO_TICKS(100));
     }
 }
