@@ -1,4 +1,4 @@
-#include "waveshare_twai_port.h" // Include the Waveshare TWAI port library
+#include "hexnet_canbus.h" // Include the Waveshare TWAI port library
 #include "stdio.h"
 #include "stdint.h"
 #include "string.h"
@@ -113,9 +113,9 @@ void send_frames_task(void *arg) {
         vTaskDelay(pdMS_TO_TICKS(100));
 
         send_can_frame(FRAME_2_ID, frame_2_data);
-        ESP_LOGI(TAG, "Frame 2 - DHT1: %d°C, DHT2: %d°C, Water1: %d%%, Water2: %d%%, Dim1: %d, Dim2: %d, Dim3: %d, Dim4: %d", 
-                 analog_inputs[2], analog_inputs[3], analog_inputs[0], analog_inputs[1],
-                 dimmable_outputs[0], dimmable_outputs[1], dimmable_outputs[2], dimmable_outputs[3]);
+        // ESP_LOGI(TAG, "Frame 2 - DHT1: %d°C, DHT2: %d°C, Water1: %d%%, Water2: %d%%, Dim1: %d, Dim2: %d, Dim3: %d, Dim4: %d", 
+        //          analog_inputs[2], analog_inputs[3], analog_inputs[0], analog_inputs[1],
+        //          dimmable_outputs[0], dimmable_outputs[1], dimmable_outputs[2], dimmable_outputs[3]);
         vTaskDelay(pdMS_TO_TICKS(100));
 
         send_can_frame(FRAME_3_ID, frame_3_data);
@@ -146,6 +146,13 @@ uint16_t get_outputs() {
 uint8_t get_dimmable_output(uint8_t index) {
     if (index < 4) {
         return dimmable_outputs[index];
+    }
+    return 0;
+}
+
+uint8_t get_analog_input(uint8_t index) {
+    if (index < 4) {
+        return analog_inputs[index];
     }
     return 0;
 }

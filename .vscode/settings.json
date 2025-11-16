@@ -67,6 +67,7 @@
         "xtr1common": "cpp",
         "adc_monitor.h": "c",
         "temperature.h": "c",
-        "dht_task.h": "c"
+        "dht_task.h": "c",
+        "hexnet_canbus.h": "c"
     }
 }

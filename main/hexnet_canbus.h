@@ -1,4 +1,4 @@
-#ifndef __TWAI_PORT_H // Header guard to prevent multiple inclusions 
+#ifndef __HEXNET_CANBUS_H // Header guard to prevent multiple inclusions 
 
 #include <stdio.h>             // Standard I/O library 
 #include <stdlib.h>            // Standard library for memory allocation, etc. 
@@ -50,5 +50,6 @@ uint8_t get_b_value();
 uint8_t get_rgb_enable(); // Get RGB enable flag
 uint16_t get_outputs();
 uint8_t get_dimmable_output(uint8_t index); // Get outputs value
+uint8_t get_analog_input(uint8_t index); // Get analog input value
 
 #endif // End of header guard 

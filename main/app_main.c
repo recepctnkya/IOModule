@@ -21,7 +21,8 @@
 #include "esp_event.h"
 #include "esp_netif.h"
 #include "protocol_examples_common.h"
-#include "waveshare_twai_port.h" // Include the Waveshare TWAI port library 
+#include "hexnet_canbus.h" // Include the Waveshare TWAI port library 
+#include "hexnet_bluetooth.h"
 #include "esp_log.h"
 #include "driver/gpio.h"
 #include "mqtt_client.h"
@@ -167,13 +168,21 @@ void app_rgb(void *arg) {
     while (1) {
         for(int i = 0; i < LED_NUM; i++) {
             if (led_state_off) ws2812_buffer[i] = (CRGB){.r=0, .g=0, .b=0};
+#if BLE_ENB
+            else ws2812_buffer[i] = (CRGB){.r=get_rgb_val(0), .g=get_rgb_val(1), .b=get_rgb_val(2)};
+#else
             else ws2812_buffer[i] = (CRGB){.r=get_g_value(), .g=get_r_value(), .b=get_b_value()};
+#endif
         }
         //ESP_LOGI(TAG, "Updating RGB LEDs with values: R=%d, G=%d, B=%d", get_r_value(), get_g_value(), get_b_value());
         ESP_ERROR_CHECK_WITHOUT_ABORT(ws28xx_update());
         vTaskDelay(pdMS_TO_TICKS(100));
-
-        if(get_rgb_enable() == 1) {
+#if BLE_ENB
+            if(get_rgb_val(3) == 1) 
+#else
+            if(get_rgb_enable() == 1) 
+#endif
+        {
             led_state_off = 0;
         } else {
             led_state_off = 1;
@@ -315,7 +324,11 @@ void shift_register_task(void *arg)
     uint16_t outputs = get_outputs(); // Get current outputs from CAN/TWAI logic
     while (1) {
         // Turn ON all outputs (1s)
+#if BLE_ENB
+        shift_register_write(get_outputsFromBle());
+#else
         shift_register_write(get_outputs());
+#endif
         vTaskDelay(pdMS_TO_TICKS(100));
     }
     //outputs = get_outputs();
@@ -388,10 +401,17 @@ void rgb_pwm_task(void *pvParameters)
     ESP_ERROR_CHECK(ledc_channel_config(&ledc_channel_led2));
 
     while (1) {
-        // Get dimmable output values (0-255) and convert to PWM duty (0-1023)
-        uint32_t rgb_duty = (get_dimmable_output(0) * 1023) / 255;  // RGB_RELAY from dimmable_outputs[0]
-        uint32_t led2_duty = (get_dimmable_output(1) * 1023) / 255; // LED2_PIN from dimmable_outputs[1]
-        
+
+#if BLE_ENB
+    uint32_t rgb_duty = (get_dim_value(0) * 1023) / 100;  // RGB_RELAY from dimmable_outputs[0]
+    uint32_t led2_duty = (get_dim_value(1) * 1023) / 100; // LED2_PIN from dimmable_outputs[1]
+            
+    //ESP_LOGI(TAG, "PWM Update - : %d duty: %d, : %d duty: %d", get_dim_value(0), (uint16_t)rgb_duty, get_dim_value(1), (uint16_t)led2_duty);
+#else
+    // Get dimmable output values (0-255) and convert to PWM duty (0-1023)
+    uint32_t rgb_duty = (get_dimmable_output(0) * 1023) / 100;  // RGB_RELAY from dimmable_outputs[0]
+    uint32_t led2_duty = (get_dimmable_output(1) * 1023) / 100; // LED2_PIN from dimmable_outputs[1]
+#endif    
         // Set PWM duty for RGB_RELAY
         ESP_ERROR_CHECK(ledc_set_duty(LEDC_MODE, LEDC_CHANNEL_RGB, rgb_duty));
         ESP_ERROR_CHECK(ledc_update_duty(LEDC_MODE, LEDC_CHANNEL_RGB));
@@ -399,11 +419,29 @@ void rgb_pwm_task(void *pvParameters)
         // Set PWM duty for LED2_PIN
         ESP_ERROR_CHECK(ledc_set_duty(LEDC_MODE, LEDC_CHANNEL_LED2, led2_duty));
         ESP_ERROR_CHECK(ledc_update_duty(LEDC_MODE, LEDC_CHANNEL_LED2));
-        
-        // ESP_LOGI(TAG, "PWM Update - RGB_RELAY: %d/255 (duty: %"PRIu32"/1023), LED2_PIN: %d/255 (duty: %"PRIu32"/1023)", 
-        //          get_dimmable_output(0), rgb_duty, get_dimmable_output(1), led2_duty);
+
+
         
         vTaskDelay(pdMS_TO_TICKS(100)); // Update every 100ms
+    }
+}
+
+
+void set_ble_data_task(void *arg) 
+{
+    bool btConnected = false;
+    const uint16_t* regs_data = NULL;
+    while (1) 
+    {
+        btConnected = get_connection_status();
+        if(!btConnected){
+        }
+        else{
+            char* converted_json_data;
+            get_data_json_format(regs_data, 0, &converted_json_data);
+            set_converted_json_data(converted_json_data);
+        }
+        vTaskDelay(pdMS_TO_TICKS(200));
     }
 }
 
@@ -590,19 +628,12 @@ void app_main(void)
     esp_log_level_set("TRANSPORT", ESP_LOG_VERBOSE);
     esp_log_level_set("custom_outbox", ESP_LOG_VERBOSE);
 
-    ESP_ERROR_CHECK(nvs_flash_init());
-    //ESP_ERROR_CHECK(esp_netif_init());
-    //ESP_ERROR_CHECK(esp_event_loop_create_default());
 
-    /* This helper function configures Wi-Fi or Ethernet, as selected in menuconfig.
-     * Read "Establishing Wi-Fi or Ethernet Connection" section in
-     * examples/protocols/README.md for more information about this function.
-     */
-    //ESP_ERROR_CHECK(example_connect());
-
-
-
+#if BLE_ENB
+    ble_init(); // Initialize Bluetooth LE
+#endif
     waveshare_twai_init(); // Initialize the Waveshare TWAI module 
+
     xTaskCreate(send_frames_task, "send_frames_task", 4096, NULL, 5, NULL);
     xTaskCreate(receive_frames_task, "receive_frames_task", 4096, NULL, 5, NULL);
     xTaskCreate(can_watchdog_task, "can_watchdog_task", 4096, NULL, 6, NULL); // Higher priority for watchdog
@@ -617,6 +648,7 @@ void app_main(void)
        
     xTaskCreate(dht_task, "dht_task", 4096, NULL, 5, NULL); 
     xTaskCreate(rgb_pwm_task, "rgb_pwm_task", 4096, NULL, 5, NULL);  
+    xTaskCreate(set_ble_data_task, "set_ble_data_task", 4096, NULL, 5, NULL);  
 
     //i2c_scan();
 }
