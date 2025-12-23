@@ -105,8 +105,8 @@ esp_adc_cal_characteristics_t adc_chars;
 
 #define RGB_GPIO 37
 #define LED_NUM 65  
-#define RGB_RELAY 36
-#define LED2_PIN 35
+#define PWM_CHANNEL1 1
+#define PWM_CHANNEL2 2
 
 static uint8_t led_state_off = 0;
 CRGB* ws2812_buffer;
@@ -376,25 +376,25 @@ void rgb_pwm_task(void *pvParameters)
     };
     ESP_ERROR_CHECK(ledc_timer_config(&ledc_timer));
 
-    // RGB_RELAY channel configuration (dimmable_outputs[0])
+    // PWM_CHANNEL1 channel configuration (dimmable_outputs[0])
     ledc_channel_config_t ledc_channel_rgb = {
         .speed_mode     = LEDC_MODE,
         .channel        = LEDC_CHANNEL_RGB,
         .timer_sel      = LEDC_TIMER,
         .intr_type      = LEDC_INTR_DISABLE,
-        .gpio_num       = RGB_RELAY,
+        .gpio_num       = PWM_CHANNEL1,
         .duty           = 0, // Initially off
         .hpoint         = 0
     };
     ESP_ERROR_CHECK(ledc_channel_config(&ledc_channel_rgb));
 
-    // LED2_PIN channel configuration (dimmable_outputs[1])
+    // PWM_CHANNEL2 channel configuration (dimmable_outputs[1])
     ledc_channel_config_t ledc_channel_led2 = {
         .speed_mode     = LEDC_MODE,
         .channel        = LEDC_CHANNEL_LED2,
         .timer_sel      = LEDC_TIMER,
         .intr_type      = LEDC_INTR_DISABLE,
-        .gpio_num       = LED2_PIN,
+        .gpio_num       = PWM_CHANNEL2,
         .duty           = 0, // Initially off
         .hpoint         = 0
     };
@@ -403,20 +403,20 @@ void rgb_pwm_task(void *pvParameters)
     while (1) {
 
 #if BLE_ENB
-    uint32_t rgb_duty = (get_dim_value(0) * 1023) / 100;  // RGB_RELAY from dimmable_outputs[0]
-    uint32_t led2_duty = (get_dim_value(1) * 1023) / 100; // LED2_PIN from dimmable_outputs[1]
+    uint32_t rgb_duty = (get_dim_value(0) * 1023) / 100;  // PWM_CHANNEL1 from dimmable_outputs[0]
+    uint32_t led2_duty = (get_dim_value(1) * 1023) / 100; // PWM_CHANNEL2 from dimmable_outputs[1]
             
     //ESP_LOGI(TAG, "PWM Update - : %d duty: %d, : %d duty: %d", get_dim_value(0), (uint16_t)rgb_duty, get_dim_value(1), (uint16_t)led2_duty);
 #else
     // Get dimmable output values (0-255) and convert to PWM duty (0-1023)
-    uint32_t rgb_duty = (get_dimmable_output(0) * 1023) / 100;  // RGB_RELAY from dimmable_outputs[0]
-    uint32_t led2_duty = (get_dimmable_output(1) * 1023) / 100; // LED2_PIN from dimmable_outputs[1]
+    uint32_t rgb_duty = (get_dimmable_output(0) * 1023) / 100;  // PWM_CHANNEL1 from dimmable_outputs[0]
+    uint32_t led2_duty = (get_dimmable_output(1) * 1023) / 100; // PWM_CHANNEL2 from dimmable_outputs[1]
 #endif    
-        // Set PWM duty for RGB_RELAY
+        // Set PWM duty for PWM_CHANNEL1
         ESP_ERROR_CHECK(ledc_set_duty(LEDC_MODE, LEDC_CHANNEL_RGB, rgb_duty));
         ESP_ERROR_CHECK(ledc_update_duty(LEDC_MODE, LEDC_CHANNEL_RGB));
         
-        // Set PWM duty for LED2_PIN
+        // Set PWM duty for PWM_CHANNEL2
         ESP_ERROR_CHECK(ledc_set_duty(LEDC_MODE, LEDC_CHANNEL_LED2, led2_duty));
         ESP_ERROR_CHECK(ledc_update_duty(LEDC_MODE, LEDC_CHANNEL_LED2));
 

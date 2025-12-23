@@ -126,7 +126,7 @@ void adc_monitor_task(void *param)
 
         get_average_water_levels(&waterLevel1, &waterLevel2);
 
-        //ESP_LOGI(TAG, "Raw ADC values - Sensor 0: %d, Sensor 1: %d , Battery voltage: %.2f V | Water Level 1: %d%% | Water Level 2: %d%%", raw0, raw1,  voltage, waterLevel1, waterLevel2);
+        ESP_LOGI(TAG, "Raw ADC values - Sensor 0: %d, Sensor 1: %d , Battery voltage: %.2f V | Water Level 1: %d%% | Water Level 2: %d%%", raw0, raw1,  voltage, waterLevel1, waterLevel2);
         // ESP_LOGI(TAG, "Battery voltage: %.2f V | Water Level 1: %d%% | Water Level 2: %d%%",
         //          voltage, waterLevel1, waterLevel2);
         
