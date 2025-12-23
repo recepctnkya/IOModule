@@ -12,7 +12,5 @@ iomodule rotary switch okuma ve can id si alma ozelligi eklensin.
 rgb led parcali kontrol ozelligi eklenecek. en fazla 4 parca. tek veya multi.
 io module sensor 485 yazilimi eklenecek.
 tablet ekran tasarimlarini displaydekine benzetsin. 
-test yapılacak
-test2 yapıalcak
-test3 yapıalcak
-test4 yapılacak
+dım guncellemelerı senkronıze olacakç
+rgb tarafı duzeltılecek
