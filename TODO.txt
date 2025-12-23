@@ -13,3 +13,4 @@ rgb led parcali kontrol ozelligi eklenecek. en fazla 4 parca. tek veya multi.
 io module sensor 485 yazilimi eklenecek.
 tablet ekran tasarimlarini displaydekine benzetsin. 
 test yapılacak
+test2 yapıalcak
