@@ -14,11 +14,11 @@
 #define BATTERY_REF_VOLTAGE   12000  // 12.0 V in mV
 #define WATERLEVEL_BUF_SIZE 100
 // Calibration points for water level % mapping
-#define SENSOR1_RAW_AT_0PCT    3181
-#define SENSOR1_RAW_AT_100PCT  3213
+#define SENSOR1_RAW_AT_0PCT    0
+#define SENSOR1_RAW_AT_100PCT  1649
 
-#define SENSOR2_RAW_AT_0PCT    3182
-#define SENSOR2_RAW_AT_100PCT  3216
+#define SENSOR2_RAW_AT_0PCT    0
+#define SENSOR2_RAW_AT_100PCT  1649
 
 #define ADC_SAMPLE_COUNT      100
 static int waterLevel1_buf[WATERLEVEL_BUF_SIZE] = {0};

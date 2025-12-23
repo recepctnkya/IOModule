@@ -1,12 +1,14 @@
--Sicaklik sensor soketlerine gnd ekleenecek cunku sensorler vcc data gnd pinlerine sahip.
--Sicaklik sensorunun analog okuma devresi duzenlenecek(C41C, D2C, R98C ve R96C kaldirilacak, R97C 0 ohm olacak. Ayni sekilde D portu icin de islem yapilacak.)
--Rgb okuma entegresi bir kere bozuldu (belki transistorlu devre eklenebilir.)
--reset butonu ekleenecek (Reset butonu baglantisi yoktu)
--ftdi devresi guncellenecek (Ftdi devresinde Q5 ters Takilmis)
--dim devresi ekleenecek (transistorlu ve mosfetli bir devre eklencek)
--su seviye devresi cozunurlik arttirilacak (su sensoru degerleri 200 ohm civarinda.   o yuzden K degerinde olan diger direncler kucultulebilir)
--analog sayisi 1 tane arttirilacak (suan 4 tane var 5 tane olacak)
--buton devresi eklenecek. ledli (cikislari kontrol edebilecegimiz bir buton devresi tasarimi yapilacak)
--5v guc devresi eklenecek rgb icin (RGB lerin hepsi 5v ile suruluyor.)
--3v3 beslemesi sicaklik sensorleri icin eklenecek. (AnalogC ve AnalogD de ben 3v3 u F1B nin ucunu kendim tasidim.)
--su sensorleri 12v uzerinden olmamali. cunku giris voltaji her zaman degisiyor. (Sistemden biraz enerji cekildiginde voltaj biraz dusuyor ve AnalogA ve AnalogB Vref degerleri sapiyor.)
+SDcard enable
+dim ve sensorlere tiklayinca sayfalarina gitsin.
+menu isimlendirmelerini ekleenecek
+wallpaper sureli ekleenecek
+motor kontrol yazilimi eklenecek
+5 inch ekran optimize edilecek
+dim yuzdelik eklenecek
+dil destegi eklenecek
+7 inc ekran yazilimi ayaga kaldirilacak.
+io modul yazilimina cikislari giris uzerinden kontrol edebilme ozelligi ekleme.
+iomodule rotary switch okuma ve can id si alma ozelligi eklensin.
+rgb led parcali kontrol ozelligi eklenecek. en fazla 4 parca. tek veya multi.
+io module sensor 485 yazilimi eklenecek.
+tablet ekran tasarimlarini displaydekine benzetsin. 
