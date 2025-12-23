@@ -105,8 +105,8 @@ esp_adc_cal_characteristics_t adc_chars;
 
 #define RGB_GPIO 37
 #define LED_NUM 65  
-#define PWM_CHANNEL1 1
-#define PWM_CHANNEL2 2
+#define PWM_CHANNEL1 1 //new define for PWM channel 1
+#define PWM_CHANNEL2 2//new define for PWM channel 2
 
 static uint8_t led_state_off = 0;
 CRGB* ws2812_buffer;
