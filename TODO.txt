@@ -15,3 +15,4 @@ tablet ekran tasarimlarini displaydekine benzetsin.
 test yapılacak
 test2 yapıalcak
 test3 yapıalcak
+test4 yapılacak
