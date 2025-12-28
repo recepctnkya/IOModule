@@ -1,18 +1,24 @@
-SDcard enable
 dim ve sensorlere tiklayinca sayfalarina gitsin.
 menu isimlendirmelerini ekleenecek
 wallpaper sureli ekleenecek
 motor kontrol yazilimi eklenecek
-5 inch ekran optimize edilecek
+SDcard enable
 dim yuzdelik eklenecek
 dil destegi eklenecek
-7 inc ekran yazilimi ayaga kaldirilacak.
+rgb led parcali kontrol ozelligi eklenecek. en fazla 4 parca. tek veya multi.
 io modul yazilimina cikislari giris uzerinden kontrol edebilme ozelligi ekleme.
 iomodule rotary switch okuma ve can id si alma ozelligi eklensin.
-rgb led parcali kontrol ozelligi eklenecek. en fazla 4 parca. tek veya multi.
 io module sensor 485 yazilimi eklenecek.
 tablet ekran tasarimlarini displaydekine benzetsin. 
-test yapılacak
-test2 yapıalcak
-test3 yapıalcak
-test4 yapılacak
+5 inch ekran optimize edilecek
+7 inc ekran yazilimi ayaga kaldirilacak.
+
+
+menuyu liste seklinde duzenle
+rgb saayfasina rgb set diye birsey ekle. 3 tane buton ve 3 tane combobox ekle. save.
+dimleri uste koy ve altina rgb set sayfasina gitsin.
+wallpaper touch ozelligi.
+dim yuzdelikleri anasayfaya da ekle.
+connection lost timeout eklenecek
+
+
