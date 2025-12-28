@@ -27,3 +27,15 @@ sdd
 dım guncellemelerı senkronıze olacakç
 rgb tarafı duzeltılecek
 >>>>>>> 2050ce96de05d92b4e4a353a8ab72aa68552e164
+
+
+
+MTU 500 tam calismiyor.
+Butonlarin kenar egimleri artirilacak.
+panel ayarlari sayfasinda done ve cancel kaldirilip save ve onay eklenecek.
+panel ayarlarinda iconlarin degisebildigini gosteren isaret eklenebilir (sag sol ok gibi)
+panel ayarlari sayfasindaki 
+rgb buton enable disable calismiyor.
+connection settings sayfasina cihazi listelesin ve tekrardan baglanabilsin.
+Connection settings sayfasinda Disconnect seklinde buyuk kirmizi buton olsun ve baglantiyi koparsin
+
