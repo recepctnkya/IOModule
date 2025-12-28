@@ -10,6 +10,7 @@ io modul yazilimina cikislari giris uzerinden kontrol edebilme ozelligi ekleme.
 iomodule rotary switch okuma ve can id si alma ozelligi eklensin.
 io module sensor 485 yazilimi eklenecek.
 tablet ekran tasarimlarini displaydekine benzetsin. 
+<<<<<<< HEAD
 5 inch ekran optimize edilecek
 7 inc ekran yazilimi ayaga kaldirilacak.
 
@@ -20,5 +21,9 @@ dimleri uste koy ve altina rgb set sayfasina gitsin.
 wallpaper touch ozelligi.
 dim yuzdelikleri anasayfaya da ekle.
 connection lost timeout eklenecek
+sdd
 
-
+=======
+dım guncellemelerı senkronıze olacakç
+rgb tarafı duzeltılecek
+>>>>>>> 2050ce96de05d92b4e4a353a8ab72aa68552e164
