@@ -57,6 +57,7 @@ static const char *TAG = "MQTT_EXAMPLE";
 #define MOTOR_EN   GPIO_NUM_16
 #define MOTOR_A    GPIO_NUM_36
 #define MOTOR_B    GPIO_NUM_35
+//here are the motor definitions
 // MUX output pins
 #define MUX1_Z GPIO_NUM_13
 #define MUX2_Z GPIO_NUM_14
