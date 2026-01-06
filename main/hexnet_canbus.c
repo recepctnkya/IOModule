@@ -184,6 +184,9 @@ void handle_rx_message(twai_message_t message) {
         b = message.data[2];
         rgb_enable = message.data[3]; // Update RGB enable flag
     }
+    else if (message.identifier == 0x750 && message.data_length_code >= 1) {
+        int motorData = message.data[0];
+    }
 }
 
 // Error recovery function

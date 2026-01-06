@@ -54,7 +54,9 @@ static const char *TAG = "MQTT_EXAMPLE";
 #define DHT_GPIO 6
 #define DHT_TYPE DHT21
 
-
+#define MOTOR_EN   GPIO_NUM_16
+#define MOTOR_A    GPIO_NUM_36
+#define MOTOR_B    GPIO_NUM_35
 // MUX output pins
 #define MUX1_Z GPIO_NUM_13
 #define MUX2_Z GPIO_NUM_14
@@ -526,6 +528,27 @@ void dht_task(void *pvParameters) {
     }
 }
 
+void motor_forward(void)
+{
+    gpio_set_level(MOTOR_EN, 1);
+    gpio_set_level(MOTOR_A, 1);
+    gpio_set_level(MOTOR_B, 0);
+}
+
+void motor_backward(void)
+{
+    gpio_set_level(MOTOR_EN, 1);
+    gpio_set_level(MOTOR_A, 0);
+    gpio_set_level(MOTOR_B, 1);
+}
+
+void motor_stop(void)
+{
+    gpio_set_level(MOTOR_EN, 0);
+    gpio_set_level(MOTOR_A, 0);
+    gpio_set_level(MOTOR_B, 0);
+}
+
 void app_main(void)
 {
 
@@ -615,6 +638,20 @@ void app_main(void)
         gpio_set_level(SR_DATA, 0);
         gpio_set_level(SR_STB, 0);
 
+    gpio_config_t io_confMotor = {
+        .mode = GPIO_MODE_OUTPUT,
+        .pin_bit_mask =
+            (1ULL << MOTOR_EN) |
+            (1ULL << MOTOR_A)  |
+            (1ULL << MOTOR_B),
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .pull_up_en   = GPIO_PULLUP_DISABLE,
+        .intr_type    = GPIO_INTR_DISABLE
+    };
+
+    gpio_config(&io_confMotor);
+
+    motor_stop();
 
     ESP_LOGI(TAG, "[APP] Startup..");
     ESP_LOGI(TAG, "[APP] Free memory: %" PRIu32 " bytes", esp_get_free_heap_size());
@@ -649,6 +686,18 @@ void app_main(void)
     xTaskCreate(dht_task, "dht_task", 4096, NULL, 5, NULL); 
     xTaskCreate(rgb_pwm_task, "rgb_pwm_task", 4096, NULL, 5, NULL);  
     xTaskCreate(set_ble_data_task, "set_ble_data_task", 4096, NULL, 5, NULL);  
+
+        motor_forward();
+        vTaskDelay(pdMS_TO_TICKS(2000));
+
+        motor_stop();
+        vTaskDelay(pdMS_TO_TICKS(1000));
+
+        motor_backward();
+        vTaskDelay(pdMS_TO_TICKS(2000));
+
+        motor_stop();
+        vTaskDelay(pdMS_TO_TICKS(2000));
 
     //i2c_scan();
 }

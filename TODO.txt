@@ -14,3 +14,5 @@ io module sensor 485 yazilimi eklenecek.
 tablet ekran tasarimlarini displaydekine benzetsin. 
 dım guncellemelerı senkronıze olacakç
 rgb tarafı duzeltılecek
+hava durumu uygulamaya da eklenecek.
+baglantı popup duzenleme yapılacak.

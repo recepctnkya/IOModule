@@ -2,11 +2,11 @@ dependencies:
   idf:
     source:
       type: idf
-    version: 5.3.0
+    version: 5.3.4
   protocol_examples_common:
     dependencies: []
     source:
-      path: C:\Users\nakau\esp\v5.3\esp-idf\examples\common_components\protocol_examples_common
+      path: C:\Users\Smartup\esp\v5.3.4\esp-idf\examples\common_components\protocol_examples_common
       type: local
     version: '*'
 direct_dependencies:
