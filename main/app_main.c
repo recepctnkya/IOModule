@@ -103,7 +103,8 @@ esp_adc_cal_characteristics_t adc_chars;
 #define LDAC_GPIO 39
 #define RDY_BSY_GPIO 38
 
-
+//create a rtos timer for checking motordata timeouts
+TimerHandle_t motorDataUpdateTimer;
 
 
 #define RGB_GPIO 37
@@ -550,6 +551,38 @@ void motor_stop(void)
     gpio_set_level(MOTOR_B, 0);
 }
 
+int motorDataUpdateCounter = 0;
+void motor_control_task(void *arg)
+{
+    while (1)
+    {
+        int mData = get_motorData();
+        if (mData == 1)
+        {
+            motor_forward();
+            ESP_LOGI(TAG, "Motor Control forward.");
+        }
+        else if (mData == 2)
+        {
+            motor_backward();
+            ESP_LOGI(TAG, "Motor Control backward.");
+        }
+        else if (mData == 0)
+        {
+            motor_stop();
+            ESP_LOGI(TAG, "Motor Control stopped.");
+        }
+        motorDataUpdateCounter++;
+        if (motorDataUpdateCounter >= 2) // Every second
+        {
+            set_motordata(0);
+            ESP_LOGI(TAG, "Motor Control time exceeded, stopping motor.");
+        }
+        vTaskDelay(pdMS_TO_TICKS(250));
+    }
+}
+
+
 void app_main(void)
 {
 
@@ -687,18 +720,8 @@ void app_main(void)
     xTaskCreate(dht_task, "dht_task", 4096, NULL, 5, NULL); 
     xTaskCreate(rgb_pwm_task, "rgb_pwm_task", 4096, NULL, 5, NULL);  
     xTaskCreate(set_ble_data_task, "set_ble_data_task", 4096, NULL, 5, NULL);  
-
-        motor_forward();
-        vTaskDelay(pdMS_TO_TICKS(2000));
-
-        motor_stop();
-        vTaskDelay(pdMS_TO_TICKS(1000));
-
-        motor_backward();
-        vTaskDelay(pdMS_TO_TICKS(2000));
-
-        motor_stop();
-        vTaskDelay(pdMS_TO_TICKS(2000));
+    //create a task for motor control based on motorData from CAN bus
+    xTaskCreate( motor_control_task, "motor_control_task", 2048, NULL, 5, NULL );
 
     //i2c_scan();
 }

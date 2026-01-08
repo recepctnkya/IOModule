@@ -32,7 +32,16 @@ uint8_t frame_3_data[8] = {0};  // Third frame data (RGB colors)
 uint16_t simvoltage = 1350;
 uint16_t simoutputs = 0;
 uint16_t siminputs = 0;
+int motorData = 0;
+extern int motorDataUpdateCounter;
 
+int get_motorData() {
+    return motorData;
+}
+
+void set_motordata(int val) {
+    motorData = val;
+}
 // Helper function to populate Frame 1 data
 void populate_frame_1(uint16_t voltage, uint16_t outputs, uint16_t inputs) {
     frame_1_data[0] = (voltage >> 8) & 0xFF;  // Voltage MSB
@@ -185,7 +194,8 @@ void handle_rx_message(twai_message_t message) {
         rgb_enable = message.data[3]; // Update RGB enable flag
     }
     else if (message.identifier == 0x750 && message.data_length_code >= 1) {
-        int motorData = message.data[0];
+        motorData = message.data[0];
+        motorDataUpdateCounter = 0; // Reset the update counter on new data
     }
 }
 

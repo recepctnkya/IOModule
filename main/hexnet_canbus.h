@@ -51,5 +51,7 @@ uint8_t get_rgb_enable(); // Get RGB enable flag
 uint16_t get_outputs();
 uint8_t get_dimmable_output(uint8_t index); // Get outputs value
 uint8_t get_analog_input(uint8_t index); // Get analog input value
+int get_motorData();
+void set_motordata(int val);
 
 #endif // End of header guard 

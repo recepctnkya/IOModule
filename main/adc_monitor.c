@@ -153,9 +153,9 @@ void adc_monitor_task(void *param)
 
 
 
-        ESP_LOGI(TAG, "Raw ADC values - Sensor 0: %d, Sensor 1: %d , Sensor 2: %d, Sensor 3: %d, Battery voltage: %.2f V | Water Level 1: %d%% | Water Level 2: %d%% | Water Level 3: %d%% | Water Level 4: %d%%", raw0, raw1, raw2, raw3, voltage, waterLevel1, waterLevel2, waterLevel3, waterLevel4);
-        ESP_LOGI(TAG, "Battery voltage: %.2f V | Water Level 1: %d%% | Water Level 2: %d%%",
-                 voltage, waterLevel1, waterLevel2);
+        // ESP_LOGI(TAG, "Raw ADC values - Sensor 0: %d, Sensor 1: %d , Sensor 2: %d, Sensor 3: %d, Battery voltage: %.2f V | Water Level 1: %d%% | Water Level 2: %d%% | Water Level 3: %d%% | Water Level 4: %d%%", raw0, raw1, raw2, raw3, voltage, waterLevel1, waterLevel2, waterLevel3, waterLevel4);
+        // ESP_LOGI(TAG, "Battery voltage: %.2f V | Water Level 1: %d%% | Water Level 2: %d%%",
+        //          voltage, waterLevel1, waterLevel2);
         
         // Update analog inputs with water level data
         update_water_levels_only(waterLevel1, waterLevel2); // DHT temps will be updated by DHT task
