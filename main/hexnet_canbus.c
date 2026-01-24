@@ -34,6 +34,8 @@ uint16_t simoutputs = 0;
 uint16_t siminputs = 0;
 int motorData = 0;
 extern int motorDataUpdateCounter;
+int sensorTemp = 0;
+int sensorHumidity = 0;
 
 int get_motorData() {
     return motorData;
@@ -42,6 +44,12 @@ int get_motorData() {
 void set_motordata(int val) {
     motorData = val;
 }
+void set_sensorTemp(int val) {
+    sensorTemp = val;
+}
+void set_sensorHumidity(int val) {
+    sensorHumidity = val;
+}   
 // Helper function to populate Frame 1 data
 void populate_frame_1(uint16_t voltage, uint16_t outputs, uint16_t inputs) {
     frame_1_data[0] = (voltage >> 8) & 0xFF;  // Voltage MSB
@@ -52,15 +60,6 @@ void populate_frame_1(uint16_t voltage, uint16_t outputs, uint16_t inputs) {
     frame_1_data[5] = inputs & 0xFF;          // Inputs LSB
 }
 
-
-// Helper function to populate Frame 3 data
-void populate_frame_3(uint8_t r, uint8_t g, uint8_t b) {
-    frame_3_data[0] = r;  // Red
-    frame_3_data[1] = g;  // Green
-    frame_3_data[2] = b;  // Blue
-    frame_3_data[3] = rgb_enable; // RGB enable flag
-}
-
 // Helper function to populate Frame 2 data
 void populate_frame_2(uint8_t analog_inputs[4], uint8_t dimmable_outputs[4]) {
     for (int i = 0; i < 4; i++) {
@@ -68,6 +67,17 @@ void populate_frame_2(uint8_t analog_inputs[4], uint8_t dimmable_outputs[4]) {
         frame_2_data[i + 4] = dimmable_outputs[i]; // Dimmable outputs
     }
 }
+
+// Helper function to populate Frame 3 data
+void populate_frame_3(uint8_t r, uint8_t g, uint8_t b) {
+    frame_3_data[0] = r;  // Red
+    frame_3_data[1] = g;  // Green
+    frame_3_data[2] = b;  // Blue
+    frame_3_data[3] = rgb_enable; // RGB enable flag
+    frame_3_data[4] = sensorTemp; // Sensor Temperature
+    frame_3_data[5] = sensorHumidity; // Sensor Humidity
+}
+
 
 
 // Function to send a CAN frame
@@ -164,6 +174,12 @@ uint8_t get_analog_input(uint8_t index) {
         return analog_inputs[index];
     }
     return 0;
+}
+
+void set_analog_input(uint8_t index, uint8_t value) {
+    if (index < 4) {
+        analog_inputs[index] = value;
+    }
 }
 
 

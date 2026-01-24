@@ -53,5 +53,8 @@ uint8_t get_dimmable_output(uint8_t index); // Get outputs value
 uint8_t get_analog_input(uint8_t index); // Get analog input value
 int get_motorData();
 void set_motordata(int val);
+void set_analog_input(uint8_t index, uint8_t value); // Set analog input value
+void set_sensorTemp(int val);
+void set_sensorHumidity(int val);  
 
 #endif // End of header guard 

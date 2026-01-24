@@ -31,13 +31,23 @@
 #include "driver/adc.h"
 #include "esp_adc_cal.h"
 #include "adc_monitor.h"
+#include "driver/uart.h"
 
 #include "dht_sensor.h"
 #include "driver/ledc.h"
 
 
 static const char *TAG = "MQTT_EXAMPLE";
+#define BUF_SIZE (1024)
 
+#define ECHO_TEST_TXD 19
+#define ECHO_TEST_RXD 20
+#define RS485_EN_PIN 8
+#define ECHO_TEST_RTS (UART_PIN_NO_CHANGE)
+#define ECHO_TEST_CTS (UART_PIN_NO_CHANGE)
+
+#define ECHO_UART_PORT_NUM      (UART_NUM_1)
+#define ECHO_UART_BAUD_RATE     115200
 
 #define SAMPLE_COUNT 100
 #define DELAY_MS 10
@@ -76,7 +86,6 @@ esp_adc_cal_characteristics_t adc_chars;
 #define FRAME_1  "F1"
 #define FRAME_2  "F2"
 #define FRAME_3  "F3"
-#define LED_GPIO_1 35
 #define LED_GPIO_2 45
 #define TOGGLE_INTERVAL_MS 200
 
@@ -102,6 +111,14 @@ esp_adc_cal_characteristics_t adc_chars;
 
 #define LDAC_GPIO 39
 #define RDY_BSY_GPIO 38
+
+
+#define SENSOR_COMM_OK 0
+#define SENSOR_COMM_LOST 1
+static int64_t last_rx_time_us = 0;
+int temperature = 0;
+int humidity = 0;
+int g_sensor_comm_status = SENSOR_COMM_LOST;
 
 //create a rtos timer for checking motordata timeouts
 TimerHandle_t motorDataUpdateTimer;
@@ -300,7 +317,6 @@ void toggle_led_task(void *arg)
     bool led_state = false;
 
     while (1) {
-        gpio_set_level(LED_GPIO_1, led_state);
         gpio_set_level(LED_GPIO_2, led_state);
         led_state = !led_state;
         vTaskDelay(pdMS_TO_TICKS(TOGGLE_INTERVAL_MS));
@@ -583,6 +599,91 @@ void motor_control_task(void *arg)
 }
 
 
+
+static void sensor_485(void *arg)
+{
+    /* ---------- RS485 EN pin setup ---------- */
+    gpio_config_t io_conf = {
+        .pin_bit_mask = (1ULL << RS485_EN_PIN),
+        .mode = GPIO_MODE_OUTPUT,
+        .pull_up_en = GPIO_PULLUP_DISABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type = GPIO_INTR_DISABLE
+    };
+    gpio_config(&io_conf);
+
+    // RS485 in RECEIVE mode
+    gpio_set_level(RS485_EN_PIN, 0);
+
+    /* ---------- UART setup ---------- */
+    uart_config_t uart_config = {
+        .baud_rate = ECHO_UART_BAUD_RATE,
+        .data_bits = UART_DATA_8_BITS,
+        .parity    = UART_PARITY_DISABLE,
+        .stop_bits = UART_STOP_BITS_1,
+        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
+        .source_clk = UART_SCLK_DEFAULT,
+    };
+
+    ESP_ERROR_CHECK(uart_driver_install(
+        ECHO_UART_PORT_NUM, BUF_SIZE * 2, 0, 0, NULL, 0));
+
+    ESP_ERROR_CHECK(uart_param_config(
+        ECHO_UART_PORT_NUM, &uart_config));
+
+    ESP_ERROR_CHECK(uart_set_pin(
+        ECHO_UART_PORT_NUM,
+        ECHO_TEST_TXD,
+        ECHO_TEST_RXD,
+        ECHO_TEST_RTS,
+        ECHO_TEST_CTS));
+
+    uint8_t *data = malloc(BUF_SIZE);
+    if (!data) {
+        ESP_LOGE(TAG, "UART RX buffer malloc failed");
+        vTaskDelete(NULL);
+    }
+
+
+
+    last_rx_time_us = esp_timer_get_time();
+
+    while (1) {
+
+        int len = uart_read_bytes(
+            ECHO_UART_PORT_NUM,
+            data,
+            BUF_SIZE - 1,
+            pdMS_TO_TICKS(100)
+        );
+
+        if (len > 0) {
+            data[len] = '\0';
+
+            /*
+             * Expected frame:
+             * $TEMP,25;HUM,48#
+             */
+            if (sscanf((char *)data, "$TEMP,%d;HUM,%d#", &temperature, &humidity) == 2) 
+            {
+                //ESP_LOGI(TAG, "TEMP=%d C | HUM=%d %%", temperature, humidity);
+                set_sensorTemp(temperature);
+                set_sensorHumidity(humidity);
+                last_rx_time_us = esp_timer_get_time();
+                g_sensor_comm_status = SENSOR_COMM_OK;
+            }
+        }
+
+        /* ---------- 10 second communication timeout ---------- */
+        if ((esp_timer_get_time() - last_rx_time_us) > 10 * 1000000LL) {
+            g_sensor_comm_status = SENSOR_COMM_LOST;
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+}
+
+
 void app_main(void)
 {
 
@@ -608,7 +709,7 @@ void app_main(void)
 
     // Configure both GPIOs as outputs
     gpio_config_t io_conf = {
-        .pin_bit_mask = (1ULL << LED_GPIO_1)  | (1ULL << LED_GPIO_2),
+        .pin_bit_mask =  (1ULL << LED_GPIO_2),
         .mode = GPIO_MODE_OUTPUT,
         .pull_down_en = GPIO_PULLDOWN_DISABLE,
         .pull_up_en = GPIO_PULLUP_DISABLE,
@@ -723,5 +824,9 @@ void app_main(void)
     //create a task for motor control based on motorData from CAN bus
     xTaskCreate( motor_control_task, "motor_control_task", 2048, NULL, 5, NULL );
 
+    xTaskCreate(sensor_485, "Sensor_uart_task", 4096, NULL, 10, NULL);
+
     //i2c_scan();
 }
+
+//$TEMP,25;HUM,48#
