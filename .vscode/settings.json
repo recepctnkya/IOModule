@@ -5,7 +5,7 @@
         "ESP_ROM_ELF_DIR": "C:\\Users\\nakau\\.espressif\\tools\\esp-rom-elfs\\20240305/",
         "IDF_TARGET": "esp32s3"
     },
-    "idf.portWin": "COM19",
+    "idf.portWin": "COM21",
     "idf.flashType": "UART",
     "files.associations": {
         "array": "c",
@@ -69,5 +69,6 @@
         "temperature.h": "c",
         "dht_task.h": "c",
         "hexnet_canbus.h": "c"
-    }
+    },
+    "idf.currentSetup": "C:\\Users\\nakau\\esp\\v5.3\\esp-idf"
 }

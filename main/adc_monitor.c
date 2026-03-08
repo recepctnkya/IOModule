@@ -109,6 +109,7 @@ void adc_monitor_task(void *param)
     while (1) {
         int battery_raw = read_adc1_avg(ADC2_BATTERY_CHANNEL);
         float voltage = calculate_input_voltage(battery_raw);
+        get_voltage((uint16_t)(voltage * 100)); // Send voltage in mV to CAN bus
         int voltage_offset = 0;
 
         //ESP_LOGI(TAG, "Battery voltage: %.2f V battery_raw: %d", voltage, battery_raw);
@@ -153,7 +154,7 @@ void adc_monitor_task(void *param)
 
 
 
-        // ESP_LOGI(TAG, "Raw ADC values - Sensor 0: %d, Sensor 1: %d , Sensor 2: %d, Sensor 3: %d, Battery voltage: %.2f V | Water Level 1: %d%% | Water Level 2: %d%% | Water Level 3: %d%% | Water Level 4: %d%%", raw0, raw1, raw2, raw3, voltage, waterLevel1, waterLevel2, waterLevel3, waterLevel4);
+         ESP_LOGI(TAG, "Raw ADC values - Sensor 0: %d, Sensor 1: %d , Sensor 2: %d, Sensor 3: %d, Battery voltage: %.2f V | Water Level 1: %d%% | Water Level 2: %d%% | Water Level 3: %d%% | Water Level 4: %d%%", raw0, raw1, raw2, raw3, voltage, waterLevel1, waterLevel2, waterLevel3, waterLevel4);
         // ESP_LOGI(TAG, "Battery voltage: %.2f V | Water Level 1: %d%% | Water Level 2: %d%%",
         //          voltage, waterLevel1, waterLevel2);
         

@@ -1,18 +1,10 @@
 SDcard enable
-dim ve sensorlere tiklayinca sayfalarina gitsin.
-menu isimlendirmelerini ekleenecek
-wallpaper sureli ekleenecek
 motor kontrol yazilimi eklenecek
-5 inch ekran optimize edilecek
-dim yuzdelik eklenecek
-dil destegi eklenecek
+dil secenegi ekleenece
+isvecce ekllenecek.
+
 7 inc ekran yazilimi ayaga kaldirilacak.
 io modul yazilimina cikislari giris uzerinden kontrol edebilme ozelligi ekleme.
-iomodule rotary switch okuma ve can id si alma ozelligi eklensin.
-rgb led parcali kontrol ozelligi eklenecek. en fazla 4 parca. tek veya multi.
-io module sensor 485 yazilimi eklenecek.
-tablet ekran tasarimlarini displaydekine benzetsin. 
 dım guncellemelerı senkronıze olacakç
-rgb tarafı duzeltılecek
-hava durumu uygulamaya da eklenecek.
-baglantı popup duzenleme yapılacak.
+rgb tarafı sync edilecek.
+sadece tablet ve io modul baglantisi yapacak.

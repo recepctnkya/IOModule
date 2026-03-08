@@ -16,6 +16,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <string.h>
+#include <math.h>
 #include "esp_system.h"
 #include "nvs_flash.h"
 #include "esp_event.h"
@@ -98,6 +99,22 @@ esp_adc_cal_characteristics_t adc_chars;
 #define PWM_FREQ_HZ     1000        // 1kHz PWM for dimming
 #define PWM_RES         LEDC_TIMER_10_BIT
 #define MAX_DUTY        ((1 << 10) - 1)  // 1023
+
+/*
+ * Map 0..100 slider percentage to LEDC duty with a gamma curve.
+ * Human brightness perception is non‑linear, so using a power law
+ * provides smoother control at the high end and prevents the LED
+ * from appearing to jump off/on near 0.
+ */
+static inline uint32_t scale_brightness(uint32_t pct)
+{
+    if (pct == 0) {
+        return 0;                 // keep zero exact so LED truly shuts off
+    }
+    const float gamma = 2.0f;      // adjust between ~1.5–2.5 for your setup
+    float norm = (float)pct / 100.0f;
+    return (uint32_t)(powf(norm, gamma) * MAX_DUTY + 0.5f);
+}
 
 
 
@@ -378,8 +395,8 @@ void shift_register_task(void *arg)
 
 #define LEDC_TIMER              LEDC_TIMER_0
 #define LEDC_MODE               LEDC_LOW_SPEED_MODE
-#define LEDC_CHANNEL_RGB        LEDC_CHANNEL_0
-#define LEDC_CHANNEL_LED2       LEDC_CHANNEL_1
+#define LEDC_PWM_CH1            LEDC_CHANNEL_0
+#define LEDC_PWM_CH2       LEDC_CHANNEL_1
 #define LEDC_DUTY_RES           LEDC_TIMER_10_BIT // 10-bit resolution (0-1023)
 #define LEDC_FREQUENCY          5000              // 5 kHz
 
@@ -397,48 +414,45 @@ void rgb_pwm_task(void *pvParameters)
     ESP_ERROR_CHECK(ledc_timer_config(&ledc_timer));
 
     // PWM_CHANNEL1 channel configuration (dimmable_outputs[0])
-    ledc_channel_config_t ledc_channel_rgb = {
+    ledc_channel_config_t pwm_channel1_config = {
         .speed_mode     = LEDC_MODE,
-        .channel        = LEDC_CHANNEL_RGB,
+        .channel        = LEDC_PWM_CH1  ,
         .timer_sel      = LEDC_TIMER,
         .intr_type      = LEDC_INTR_DISABLE,
         .gpio_num       = PWM_CHANNEL1,
         .duty           = 0, // Initially off
         .hpoint         = 0
     };
-    ESP_ERROR_CHECK(ledc_channel_config(&ledc_channel_rgb));
+    ESP_ERROR_CHECK(ledc_channel_config(&pwm_channel1_config));
 
     // PWM_CHANNEL2 channel configuration (dimmable_outputs[1])
-    ledc_channel_config_t ledc_channel_led2 = {
+    ledc_channel_config_t pwm_channel2_config = {
         .speed_mode     = LEDC_MODE,
-        .channel        = LEDC_CHANNEL_LED2,
+        .channel        = LEDC_PWM_CH2,
         .timer_sel      = LEDC_TIMER,
         .intr_type      = LEDC_INTR_DISABLE,
         .gpio_num       = PWM_CHANNEL2,
         .duty           = 0, // Initially off
         .hpoint         = 0
     };
-    ESP_ERROR_CHECK(ledc_channel_config(&ledc_channel_led2));
+    ESP_ERROR_CHECK(ledc_channel_config(&pwm_channel2_config));
 
     while (1) {
 
 #if BLE_ENB
-    uint32_t rgb_duty = (get_dim_value(0) * 1023) / 100;  // PWM_CHANNEL1 from dimmable_outputs[0]
-    uint32_t led2_duty = (get_dim_value(1) * 1023) / 100; // PWM_CHANNEL2 from dimmable_outputs[1]
-            
-    //ESP_LOGI(TAG, "PWM Update - : %d duty: %d, : %d duty: %d", get_dim_value(0), (uint16_t)rgb_duty, get_dim_value(1), (uint16_t)led2_duty);
+        uint32_t pwm1_duty = scale_brightness(get_dim_value(0));
+        uint32_t pwm2_duty = scale_brightness(get_dim_value(1));
 #else
-    // Get dimmable output values (0-255) and convert to PWM duty (0-1023)
-    uint32_t rgb_duty = (get_dimmable_output(0) * 1023) / 100;  // PWM_CHANNEL1 from dimmable_outputs[0]
-    uint32_t led2_duty = (get_dimmable_output(1) * 1023) / 100; // PWM_CHANNEL2 from dimmable_outputs[1]
-#endif    
+        uint32_t pwm1_duty = scale_brightness(get_dimmable_output(0));
+        uint32_t pwm2_duty = scale_brightness(get_dimmable_output(1));
+#endif
         // Set PWM duty for PWM_CHANNEL1
-        ESP_ERROR_CHECK(ledc_set_duty(LEDC_MODE, LEDC_CHANNEL_RGB, rgb_duty));
-        ESP_ERROR_CHECK(ledc_update_duty(LEDC_MODE, LEDC_CHANNEL_RGB));
+        ESP_ERROR_CHECK(ledc_set_duty(LEDC_MODE, LEDC_PWM_CH1   , pwm1_duty));
+        ESP_ERROR_CHECK(ledc_update_duty(LEDC_MODE, LEDC_PWM_CH1    ));
         
         // Set PWM duty for PWM_CHANNEL2
-        ESP_ERROR_CHECK(ledc_set_duty(LEDC_MODE, LEDC_CHANNEL_LED2, led2_duty));
-        ESP_ERROR_CHECK(ledc_update_duty(LEDC_MODE, LEDC_CHANNEL_LED2));
+        ESP_ERROR_CHECK(ledc_set_duty(LEDC_MODE, LEDC_PWM_CH2, pwm2_duty));
+        ESP_ERROR_CHECK(ledc_update_duty(LEDC_MODE, LEDC_PWM_CH2));
 
 
         
@@ -586,13 +600,13 @@ void motor_control_task(void *arg)
         else if (mData == 0)
         {
             motor_stop();
-            ESP_LOGI(TAG, "Motor Control stopped.");
+            //ESP_LOGI(TAG, "Motor Control stopped.");
         }
         motorDataUpdateCounter++;
         if (motorDataUpdateCounter >= 2) // Every second
         {
             set_motordata(0);
-            ESP_LOGI(TAG, "Motor Control time exceeded, stopping motor.");
+            //ESP_LOGI(TAG, "Motor Control time exceeded, stopping motor.");
         }
         vTaskDelay(pdMS_TO_TICKS(250));
     }

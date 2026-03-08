@@ -182,6 +182,10 @@ void set_analog_input(uint8_t index, uint8_t value) {
     }
 }
 
+void get_voltage(uint16_t voltage) {
+    simvoltage = voltage;
+}
+
 
 void handle_rx_message(twai_message_t message) {
     // CAN frame id 0x720: (index, val) -> update analog_inputs[index]

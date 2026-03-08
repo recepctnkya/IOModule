@@ -56,5 +56,6 @@ void set_motordata(int val);
 void set_analog_input(uint8_t index, uint8_t value); // Set analog input value
 void set_sensorTemp(int val);
 void set_sensorHumidity(int val);  
+void get_voltage(uint16_t voltage); // Send voltage value to CAN bus
 
 #endif // End of header guard 
