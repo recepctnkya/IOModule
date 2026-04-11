@@ -17,3 +17,11 @@ target_sources(${mqtt} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/main/custom_outbox.cp
 idf_component_get_property(pthread pthread COMPONENT_LIB)
 # And them we link the components
 target_link_libraries(${mqtt} ${pthread})
+
+# Workaround: GCC ICE (segfault in IRA/register-allocation pass) when compiling
+# esp_lcd_panel_rgb.c with -Og.  Compile the whole esp_lcd component at -O0.
+# esp_lcd is not performance-critical for this project so the trade-off is fine.
+if(TARGET __idf_esp_lcd)
+    idf_component_get_property(esp_lcd_lib esp_lcd COMPONENT_LIB)
+    target_compile_options(${esp_lcd_lib} PRIVATE -O0)
+endif()

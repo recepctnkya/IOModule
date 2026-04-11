@@ -1,2 +1,6 @@
 CONFIG_MQTT_CUSTOM_OUTBOX=y
 CONFIG_COMPILER_CXX_EXCEPTIONS=y
+
+# Captive portal: mobile browsers send large headers (iOS, Android, Windows)
+CONFIG_HTTPD_MAX_REQ_HDR_LEN=4096
+CONFIG_HTTPD_MAX_URI_LEN=512

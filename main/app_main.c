@@ -22,7 +22,8 @@
 #include "esp_event.h"
 #include "esp_netif.h"
 #include "protocol_examples_common.h"
-#include "hexnet_canbus.h" // Include the Waveshare TWAI port library 
+#include "wifi_prov_mgr.h"
+#include "hexnet_canbus.h" // Include the Waveshare TWAI port library
 #include "hexnet_bluetooth.h"
 #include "esp_log.h"
 #include "driver/gpio.h"
@@ -331,13 +332,30 @@ void smooth_dim_task(void *arg)
 
 void toggle_led_task(void *arg)
 {
-    bool led_state = false;
-
     while (1) {
-        gpio_set_level(LED_GPIO_2, led_state);
-        led_state = !led_state;
-        vTaskDelay(pdMS_TO_TICKS(TOGGLE_INTERVAL_MS));
-        //ESP_LOGI(TAG, "LED State ----------------------------------------------------------: %s", esp_get_idf_version());
+        switch (wifi_prov_get_state()) {
+            case WIFI_PROV_STATE_CONNECTED:
+                /* Router connection with IP – solid on */
+                gpio_set_level(LED_GPIO_2, 1);
+                vTaskDelay(pdMS_TO_TICKS(200));
+                break;
+
+            case WIFI_PROV_STATE_AP_CLIENT:
+                /* Phone/PC connected to captive portal AP – fast 100 ms blink */
+                gpio_set_level(LED_GPIO_2, 1);
+                vTaskDelay(pdMS_TO_TICKS(100));
+                gpio_set_level(LED_GPIO_2, 0);
+                vTaskDelay(pdMS_TO_TICKS(100));
+                break;
+
+            default:
+                /* Not connected / provisioning idle – slow 2000 ms blink */
+                gpio_set_level(LED_GPIO_2, 1);
+                vTaskDelay(pdMS_TO_TICKS(2000));
+                gpio_set_level(LED_GPIO_2, 0);
+                vTaskDelay(pdMS_TO_TICKS(2000));
+                break;
+        }
     }
 }
 
@@ -806,6 +824,13 @@ void app_main(void)
     ESP_LOGI(TAG, "[APP] Free memory: %" PRIu32 " bytes", esp_get_free_heap_size());
     ESP_LOGI(TAG, "[APP] IDF version: %s", esp_get_idf_version());
 
+    /* LED indicator is started before WiFi init so it reflects prov state */
+    xTaskCreate(toggle_led_task, "toggle_led_task", 2048, NULL, 5, NULL);
+
+
+    /* WiFi provisioning – blocks until connected (captive portal on first boot) */
+    ESP_ERROR_CHECK(wifi_prov_init());
+
     esp_log_level_set("*", ESP_LOG_INFO);
     esp_log_level_set("mqtt_client", ESP_LOG_VERBOSE);
     esp_log_level_set("MQTT_EXAMPLE", ESP_LOG_VERBOSE);
@@ -823,7 +848,6 @@ void app_main(void)
     xTaskCreate(send_frames_task, "send_frames_task", 4096, NULL, 5, NULL);
     xTaskCreate(receive_frames_task, "receive_frames_task", 4096, NULL, 5, NULL);
     xTaskCreate(can_watchdog_task, "can_watchdog_task", 4096, NULL, 6, NULL); // Higher priority for watchdog
-    xTaskCreate(toggle_led_task, "toggle_led_task", 2048, NULL, 5, NULL);
     xTaskCreate(shift_register_task, "shift_register_task", 2048, NULL, 5, NULL);
     //xTaskCreate(smooth_dim_task, "smooth_dim_task", 4096, NULL, 5, NULL);
     xTaskCreate(app_rgb, "rbg_", 4096, NULL, 5, NULL);
@@ -841,6 +865,7 @@ void app_main(void)
     xTaskCreate(sensor_485, "Sensor_uart_task", 4096, NULL, 10, NULL);
 
     //i2c_scan();
+
 }
 
 //$TEMP,25;HUM,48#
