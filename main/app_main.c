@@ -1,10 +1,28 @@
 /*
- * SPDX-FileCopyrightText: 2023 Espressif Systems (Shanghai) CO LTD
- *
- * SPDX-License-Identifier: Unlicense OR CC0-1.0
+ * Hexnet IO Module – application entry (orchestration only).
+ * Pin map: hexnet_io_map.h
+ * Modules: hexnet_board, hexnet_wifi, hexnet_mqtt, hexnet_app, …
  */
-/* MQTT (over TCP) Example with custom outbox
+#include <inttypes.h>
 
+<<<<<<< HEAD
+#include "hexnet_log_init.h"
+#define LOG_LOCAL_LEVEL ESP_LOG_INFO
+#include "esp_log.h"
+#include "esp_system.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "hexnet_app.h"
+#include "hexnet_board.h"
+#include "hexnet_io_profile.h"
+#include "hexnet_mqtt.h"
+#include "hexnet_wifi.h"
+#include "hexnet_version.h"
+#include "nvs_flash.h"
+#include "ota_manager.h"
+
+static const char *TAG = "APP_MAIN";
+=======
    This example code is in the Public Domain (or CC0 licensed, at your option.)
 
    Unless required by applicable law or agreed to in writing, this
@@ -715,90 +733,44 @@ static void sensor_485(void *arg)
     }
 }
 
+>>>>>>> 4ada128a93d42e7407371d5f2fbc719e66ac861f
 
 void app_main(void)
 {
 
+    hexnet_board_gpio_init();
 
+    hexnet_board_start_status_led();
 
+    ESP_LOGI(
+        TAG,
+        "Hexnet IO line=%s release=%s | fw=%s | heap=%" PRIu32 " | IDF %s",
+        HEXNET_IO_DEV_LINE,
+        HEXNET_IO_RELEASE,
+        hexnet_firmware_version_string(),
+        esp_get_free_heap_size(),
+        esp_get_idf_version());
 
-    // Configure MUX control pins
-    gpio_config_t io_confz = {
-        .mode = GPIO_MODE_OUTPUT,
-        .pin_bit_mask = (1ULL << S0) | (1ULL << S1) | (1ULL << S2),
-    };
-    gpio_config(&io_confz);
+    ota_manager_init();
 
-    // Configure MUX Z output pins (as input to MCU)
-    gpio_config_t in_conf = {
-        .mode = GPIO_MODE_INPUT,
-        .pin_bit_mask = (1ULL << MUX1_Z) | (1ULL << MUX2_Z),
-        .pull_up_en = GPIO_PULLUP_ENABLE,  // optional based on sensor
-    };
-    gpio_config(&in_conf);
+    esp_err_t nvs_ret = nvs_flash_init();
+    if (nvs_ret == ESP_ERR_NVS_NO_FREE_PAGES || nvs_ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        nvs_ret = nvs_flash_init();
+    }
+    ESP_ERROR_CHECK(nvs_ret);
 
+    hexnet_log_init();
 
-
-    // Configure both GPIOs as outputs
-    gpio_config_t io_conf = {
-        .pin_bit_mask =  (1ULL << LED_GPIO_2),
-        .mode = GPIO_MODE_OUTPUT,
-        .pull_down_en = GPIO_PULLDOWN_DISABLE,
-        .pull_up_en = GPIO_PULLUP_DISABLE,
-        .intr_type = GPIO_INTR_DISABLE
-    };
-    gpio_config(&io_conf);
-
+    hexnet_io_profile_init();
  
-
-
-
-    // Configure GPIOs as outputs
-    gpio_config_t io_confSR = {
-        .pin_bit_mask = (1ULL << SR_CLK) | (1ULL << SR_DATA) | (1ULL << SR_STB),
-        .mode = GPIO_MODE_OUTPUT,
-        .pull_up_en = GPIO_PULLUP_DISABLE,
-        .pull_down_en = GPIO_PULLDOWN_DISABLE,
-        .intr_type = GPIO_INTR_DISABLE
-    };
-    gpio_config(&io_confSR);
-
-
-    // Configure I2C
-    i2c_config_t conf = {
-        .mode = I2C_MODE_MASTER,
-        .sda_io_num = I2C_MASTER_SDA_IO,
-        .scl_io_num = I2C_MASTER_SCL_IO,
-        .sda_pullup_en = GPIO_PULLUP_ENABLE,
-        .scl_pullup_en = GPIO_PULLUP_ENABLE,
-        .master.clk_speed = I2C_MASTER_FREQ_HZ,
-    };
-    i2c_param_config(I2C_MASTER_NUM, &conf);
-    i2c_driver_install(I2C_MASTER_NUM, conf.mode, 0, 0, 0);
-
-
-
-        // Configure GPIOs
-        gpio_config_t io_conf2 = {
-            .intr_type = GPIO_INTR_DISABLE,
-            .mode = GPIO_MODE_OUTPUT,
-            .pin_bit_mask = (1ULL << LDAC_GPIO),
-            .pull_down_en = 0,
-            .pull_up_en = 0,
-        };
-        gpio_config(&io_conf2);
-        gpio_set_level(LDAC_GPIO, 1);
-        
+    hexnet_mqtt_init();
+    hexnet_wifi_init();
     
-        gpio_config_t rdy_conf = {
-            .intr_type = GPIO_INTR_DISABLE,
-            .mode = GPIO_MODE_INPUT,
-            .pin_bit_mask = (1ULL << RDY_BSY_GPIO),
-            .pull_down_en = 0,
-            .pull_up_en = 1,
-        };
-        gpio_config(&rdy_conf);
+    xTaskCreate(hexnet_app_bringup_task, "app_bringup", 4096, NULL, 4, NULL);
 
+<<<<<<< HEAD
+=======
 
         // Initialize lines low
         gpio_set_level(SR_CLK, 0);
@@ -866,6 +838,5 @@ void app_main(void)
 
     //i2c_scan();
 
+>>>>>>> 4ada128a93d42e7407371d5f2fbc719e66ac861f
 }
-
-//$TEMP,25;HUM,48#

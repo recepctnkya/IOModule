@@ -1,10 +1,43 @@
 CONFIG_MQTT_CUSTOM_OUTBOX=y
+CONFIG_MQTT_SKIP_PUBLISH_IF_DISCONNECTED=y
 CONFIG_COMPILER_CXX_EXCEPTIONS=y
 
-# Custom partition table – maximises app space on 2 MB flash
+<<<<<<< HEAD
+# ESP32-S3: 8 MB flash, DIO @ 40 MHz (must match hardware; was 2MB/single-app before OTA)
+CONFIG_ESPTOOLPY_FLASHMODE_DIO=y
+CONFIG_ESPTOOLPY_FLASHFREQ_40M=y
+CONFIG_ESPTOOLPY_FLASHSIZE_8MB=y
+# Flash baud: idf_ext.py sets ESPBAUD=460800 (use 38400 if USB flash is unstable)
+
+# 8 MB dual OTA (factory + ota_0 + ota_1)
 CONFIG_PARTITION_TABLE_CUSTOM=y
 CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+CONFIG_PARTITION_TABLE_OFFSET=0x8000
 
+# OTA: HTTP allowed for phase-1 testing; HTTPS + sha256 later
+CONFIG_ESP_HTTPS_OTA_ALLOW_HTTP=y
+CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y
+
+CONFIG_EXAMPLE_CONNECT_WIFI=y
+CONFIG_EXAMPLE_WIFI_SSID="Inteno-4035"
+CONFIG_EXAMPLE_WIFI_PASSWORD="MTWBXRPQ34DU4Z"
+CONFIG_EXAMPLE_WIFI_AUTH_WPA2_PSK=y
+
+# BLE (required by hexnet_bluetooth; survives idf.py set-target)
+CONFIG_BT_ENABLED=y
+CONFIG_BT_BLUEDROID_ENABLED=y
+CONFIG_BT_CONTROLLER_ENABLED=y
+
+# Wi-Fi setup portal: phones send long User-Agent / cookie headers
+CONFIG_HTTPD_MAX_REQ_HDR_LEN=2048
+CONFIG_HTTPD_MAX_URI_LEN=512
+
+# USB supply: avoid reset loops during Wi-Fi AP + portal
+# CONFIG_ESP_BROWNOUT_DET is not set
+# CONFIG_SPI_FLASH_BROWNOUT_RESET is not set
+# CONFIG_SPI_FLASH_BROWNOUT_RESET_XMC is not set
+=======
 # Captive portal: mobile browsers send large headers (iOS, Android, Windows)
 CONFIG_HTTPD_MAX_REQ_HDR_LEN=4096
 CONFIG_HTTPD_MAX_URI_LEN=512
+>>>>>>> 4ada128a93d42e7407371d5f2fbc719e66ac861f

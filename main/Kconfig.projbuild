@@ -1,42 +1,13 @@
 menu "Example Configuration"
 
     config BROKER_URL
-        string "Broker URL (legacy)"
+        string "Broker URL"
         default "mqtt://mqtt.eclipseprojects.io"
         help
-            Legacy broker URL (kept for custom_outbox example compatibility)
+            URL of the broker to connect to
 
     config BROKER_URL_FROM_STDIN
         bool
         default y if BROKER_URL = "FROM_STDIN"
-
-endmenu
-
-menu "VANGO MQTT Configuration"
-
-    config MQTT_BROKER_URL
-        string "MQTT Broker URL"
-        default "mqtt://broker.hivemq.com"
-        help
-            MQTT broker to connect to after WiFi provisioning.
-            Public test brokers (no authentication required):
-              mqtt://broker.hivemq.com   – HiveMQ community (recommended)
-              mqtt://test.mosquitto.org  – Eclipse Mosquitto public test
-            Self-hosted Mosquitto: mqtt://192.168.x.x:1883
-
-    config MQTT_TOPIC_PREFIX
-        string "MQTT Topic Prefix"
-        default "hexnet/vango"
-        help
-            Full topics will be:
-              {prefix}/{MAC_HEX}/telemetry  (device → broker)
-              {prefix}/{MAC_HEX}/control    (broker → device)
-
-    config MQTT_TELEMETRY_INTERVAL_MS
-        int "Telemetry publish interval (ms)"
-        default 5000
-        range 1000 60000
-        help
-            How often sensor data is published to the broker.
 
 endmenu

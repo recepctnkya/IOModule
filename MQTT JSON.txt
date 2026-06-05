@@ -1,0 +1,134 @@
+### 🎯 AMAÇ
+
+Hexnet IO Module için MQTT üzerinden gönderilen telemetry JSON formatı yeniden tasarlanacak ve standart hale getirilecek. Mevcut yapıda aynı veriler farklı isimlerle gönderiliyor (`volt`, `battery_v`, `battery_voltage` gibi). Bu tamamen kaldırılmalı ve tek bir standart kullanılmalı.
+
+Ayrıca `ts` (timestamp) alanı doğru ve güvenilir şekilde üretilecek.
+
+---
+
+### 🔧 YAPILACAKLAR
+
+#### 1. JSON FORMATINI TAMAMEN YENİDEN TANIMLA
+
+Aşağıdaki yapı **tek standart** olacak:
+
+```json
+{
+  "protocol": "hexnet-io",
+  "version": "1.0",
+  "ts": 0,
+
+  "device": {
+    "id": 0,
+    "mac": "",
+    "company_id": 0,
+    "customer_id": 0,
+    "fw": ""
+  },
+
+  "status": {
+    "online": true,
+    "wifi_rssi": 0,
+    "mqtt": "connected"
+  },
+
+  "power": {
+    "vin_v": 0.0,
+    "battery_v": 0.0,
+    "battery_pct": 0
+  },
+
+  "sensors": {
+    "temperature_c": 0.0,
+    "humidity_pct": 0.0,
+    "water_pct": [0, 0, 0, 0]
+  },
+
+  "outputs": {
+    "relays": [0,0,0,0,0,0,0,0],
+    "relays_mask": 0,
+    "dimmers": [0,0,0,0],
+    "rgb": {
+      "r": 0,
+      "g": 0,
+      "b": 0
+    }
+  }
+}
+```
+
+---
+
+### ❌ KALDIRILACAK ALANLAR
+
+Aşağıdaki alanlar tamamen kaldırılmalı:
+
+* volt
+* battery
+* batteryVolt
+* battery_voltage
+* outputs_mask (yerine relays + relays_mask kullanılacak)
+* rgb array (yerine object kullanılacak)
+
+---
+
+### ✅ STANDART KURALLAR
+
+* Tüm voltajlar → `*_v`
+* Yüzdeler → `*_pct`
+* Sıcaklık → `temperature_c`
+* Röleler → `relays` array (0/1)
+* Dimmer → 0–100 arası değer
+* RGB → object formatında olacak
+
+---
+
+### ⏱️ TS (TIMESTAMP) KURALI
+
+`ts` alanı:
+
+* Unix timestamp (saniye cinsinden)
+* int tipinde olacak
+* NTP ile alınacak
+
+---
+
+### 🌐 ESP32 TARAFI (NTP)
+
+Aşağıdaki yapı implement edilecek:
+
+1. Cihaz WiFi/Ethernet bağlanır
+2. SNTP başlatılır
+3. Saat senkron olana kadar beklenir
+4. Sonra telemetry gönderilir
+
+---
+
+### ⚠️ KRİTİK KURAL
+
+Eğer saat henüz senkron değilse:
+
+```json
+"ts": 0
+```
+
+veya telemetry gönderilmemeli
+
+---
+
+### 🧠 EK NOTLAR
+
+* JSON yapısı tüm sistemlerde (platform + mobil + backend) ortak olacak
+* Bu yapı ileride değiştirilmeyecek → backward compatibility önemli
+* Master/Slave sistemde master isterse ts ekleyebilir ama öncelik cihazda olmalı
+
+---
+
+### 🚀 BEKLENEN ÇIKTI
+
+* Yeni JSON formatına göre telemetry üretimi
+* Eski field’ların tamamen kaldırılması
+* NTP senkronizasyonu eklenmesi
+* `ts` doğru şekilde doldurulması
+
+---

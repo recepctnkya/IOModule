@@ -11,12 +11,12 @@
 #include "freertos/task.h"
 #include "freertos/event_groups.h"
 #include "esp_system.h"
-#include "esp_log.h"
 #include "nvs_flash.h"
 #include "esp_bt.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
 
 
 #include "esp_gap_ble_api.h"
@@ -33,10 +33,10 @@
 #define SPP_PROFILE_NUM             1
 #define SPP_PROFILE_APP_IDX         0
 #define ESP_SPP_APP_ID              0x56
-#define SAMPLE_DEVICE_NAME          "VANGO_"    //The Device Name Characteristics in GAP
+#define SAMPLE_DEVICE_NAME          "Vango Medium"    //The Device Name Characteristics in GAP
 #define SPP_SVC_INST_ID	            0
 
-#define BLE_ENB 0
+#define BLE_ENB 1
 
 /// SPP Service
 static const uint16_t spp_service_uuid = 0xABF0;
@@ -88,13 +88,15 @@ static uint8_t find_char_and_desr_index(uint16_t handle);
 static bool store_wr_buffer(esp_ble_gatts_cb_param_t *p_data);
 static void free_write_buffer(void);
 static void process_complete_data(void);
-bool get_connection_status();
+bool get_connection_status(void);
+bool hexnet_ble_is_connected(void);
 void set_converted_json_data(char* converted_json_data);
 uint8_t* get_spp_cmd_buff();
 void reset_spp_cmd_buff();
 void parse_ble_data(const char* json_data);
 static void parse_read_data(cJSON* json);
-static void parse_write_data(cJSON* json);
+void parse_write_data(cJSON *json);
+void hexnet_outputs_ble_mirror(uint16_t mask);
 static void parse_configuration_data(cJSON* json);
 static void parse_rules_data(cJSON* json);
 void load_theme_configuration_from_nvs(int* themeType, int* wallpaperEnabled, int* wallpaperTimeIndex);

@@ -16,8 +16,4 @@
 void adc_monitor_init(void);
 void adc_monitor_task(void *param);
 
-/** Returns averaged water-level percentages for all four sensors. */
-void get_average_water_levels(int *pWaterLevel1, int *pWaterLevel2,
-                               int *pWaterLevel3, int *pWaterLevel4);
-
 #endif // ADC_MONITOR_H

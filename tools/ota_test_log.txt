@@ -1,0 +1,8 @@
+=== MQTT publish hexnet/v1/2/14/command ===
+{"cmd": "ota_start", "args": {"url": "http://192.168.1.103:8765/mqtt_tcp_custom_outbox.bin", "version": "0.39.0", "force": true}}
+=== Serial log (100s) ===
+Traceback (most recent call last):
+  File "C:\Users\Smartup\Desktop\ARGE\Hexnet\HexnetWorkspace\IOModule\IOModule-v0-40\tools\ota_test_run.py", line 33, in <module>
+    sys.stdout.write(chunk.decode("utf-8", errors="replace"))
+  File "encodings\cp1254.py", line 19, in encode
+UnicodeEncodeError: 'charmap' codec can't encode character '\ufffd' in position 19: character maps to <undefined>

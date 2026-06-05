@@ -1,0 +1,30 @@
+{
+
+	"folders": [
+
+		{
+
+			"path": ".",
+
+			"name": "IOModule-v0-50 — IOModule-v0-50.code-workspace kullanın"
+
+		}
+
+	],
+
+	"settings": {
+
+		"idf.portWin": "COM40",
+
+		"idf.currentSetup": "C:\\Espressif\\frameworks\\esp-idf-v5.5.2",
+
+		"idf.customExtraVars": {
+
+			"IDF_TARGET": "esp32s3"
+
+		}
+
+	}
+
+}
+

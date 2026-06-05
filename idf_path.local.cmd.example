@@ -1,0 +1,4 @@
+@echo off
+REM Bu dosyayi "idf_path.local.cmd" olarak kopyalayin (git'e eklemeyin).
+REM Kendi ESP-IDF kurulum yolunuzu yazin:
+set "IDF_PATH=C:\Espressif\frameworks\esp-idf-v5.5.2"

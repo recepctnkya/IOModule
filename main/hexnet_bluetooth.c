@@ -4,27 +4,32 @@
  * SPDX-License-Identifier: Unlicense OR CC0-1.0
  */
 
+#include "hexnet_log.h"
+#define LOG_LOCAL_LEVEL HEXNET_LOG_LEVEL_BLE
+#include "esp_log.h"
 #include "hexnet_bluetooth.h"
 #include "cJSON.h"
 #include "hexnet_canbus.h"
+#include "hexnet_resolve_mqtt.h"
+#include "hexnet_io_profile.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
 #include "esp_timer.h"
 #include "driver/gpio.h"
 #include "esp_err.h"
-#include "esp_log.h"
 #include "nvs_flash.h"
 #include "nvs.h"
+#include "hexnet_nvs.h"
 
 
-static const uint8_t spp_adv_data[23] = {
+static const uint8_t spp_adv_data[] = {
     /* Flags */
     0x02,0x01,0x06,
     /* Complete List of 16-bit Service Class UUIDs */
     0x03,0x03,0xF0,0xAB,
     /* Complete Local Name in advertising */
-    0x0F,0x09, 'V', 'A', 'N', 'G', 'O', '_'
+    0x10,0x09, 'V','A','N','G','O',' ','I','O',' ','M','O','D','U','L','E'
 };
 
 
@@ -128,6 +133,7 @@ static spp_receive_data_buff_t SppRecvDataBuff = {
 };
 
 static void gatts_profile_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if, esp_ble_gatts_cb_param_t *param);
+static void parse_and_store_mqtt_route_ids(cJSON *json);
 
 /* One gatt-based profile one app_id and one gatts_if, this array will store the gatts_if returned by ESP_GATTS_REG_EVT */
 static struct gatts_profile_inst spp_profile_tab[SPP_PROFILE_NUM] = {
@@ -559,6 +565,16 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_
     	    spp_gatts_if = gatts_if;
     	    is_connected = true;
 
+            {
+                char wifi_mac[24] = {0};
+                if (hexnet_format_wifi_mac(wifi_mac, sizeof(wifi_mac))) {
+                    ESP_LOGI(
+                        GATTS_TABLE_TAG,
+                        "BLE baglandi; platform MAC (Wi-Fi STA)=%s",
+                        wifi_mac);
+                }
+            }
+
             ESP_LOGI(GATTS_TABLE_TAG, "Client connected, current MTU: %d", spp_mtu_size);
 
             // Initialize MTU negotiation state
@@ -677,6 +693,66 @@ uint16_t get_outputsFromBle() {
     return outputsFromBle;
 }
 
+void hexnet_outputs_ble_mirror(uint16_t mask)
+{
+    outputsFromBle = mask;
+}
+
+static bool json_try_get_positive_int(cJSON *json, const char *key, int *out)
+{
+    if (!json || !key || !out) {
+        return false;
+    }
+    cJSON *item = cJSON_GetObjectItem(json, key);
+    if (item && cJSON_IsNumber(item) && item->valueint > 0) {
+        *out = item->valueint;
+        return true;
+    }
+    return false;
+}
+
+static void parse_and_store_mqtt_route_ids(cJSON *json)
+{
+    if (!json) {
+        return;
+    }
+
+    int cid = 0;
+    int did = 0;
+
+    (void)json_try_get_positive_int(json, "mqttCid", &cid);
+    (void)json_try_get_positive_int(json, "company_id", &cid);
+    (void)json_try_get_positive_int(json, "companyId", &cid);
+    (void)json_try_get_positive_int(json, "cid", &cid);
+
+    (void)json_try_get_positive_int(json, "mqttDid", &did);
+    (void)json_try_get_positive_int(json, "mqtt_route_device_id", &did);
+    (void)json_try_get_positive_int(json, "device_id", &did);
+    (void)json_try_get_positive_int(json, "deviceId", &did);
+    (void)json_try_get_positive_int(json, "did", &did);
+
+    cJSON *mqttObj = cJSON_GetObjectItem(json, "mqtt");
+    if (mqttObj && cJSON_IsObject(mqttObj)) {
+        (void)json_try_get_positive_int(mqttObj, "cid", &cid);
+        (void)json_try_get_positive_int(mqttObj, "company_id", &cid);
+        (void)json_try_get_positive_int(mqttObj, "companyId", &cid);
+        (void)json_try_get_positive_int(mqttObj, "did", &did);
+        (void)json_try_get_positive_int(mqttObj, "device_id", &did);
+        (void)json_try_get_positive_int(mqttObj, "deviceId", &did);
+        (void)json_try_get_positive_int(mqttObj, "mqtt_route_device_id", &did);
+    }
+
+    if (cid > 0) {
+        (void)nvs_write_int("mqttCid", cid);
+    }
+    if (did > 0) {
+        (void)nvs_write_int("mqttDid", did);
+    }
+    if (cid > 0 || did > 0) {
+        ESP_LOGI("MQTT_ROUTE", "Stored MQTT route ids from BLE: cid=%d did=%d", cid, did);
+    }
+}
+
 // Function to parse BLE data and call the appropriate parsing function
 void parse_ble_data(const char* json_data) {
     cJSON* json = cJSON_Parse(json_data);
@@ -685,6 +761,8 @@ void parse_ble_data(const char* json_data) {
         //ESP_LOGE(GATTS_TABLE_TAG, "Invalid JSON data");
         return;
     }
+
+    parse_and_store_mqtt_route_ids(json);
 
     cJSON* messageType = cJSON_GetObjectItem(json, "MessageType");
     if (messageType == NULL || !cJSON_IsString(messageType)) {
@@ -720,7 +798,6 @@ void parse_write_data(cJSON* json) {
     cJSON* writeDataType = cJSON_GetObjectItem(json, "writeDataType");
     cJSON* writeNo = cJSON_GetObjectItem(json, "writeNo");
     cJSON* writeData = cJSON_GetObjectItem(json, "writeData");
-    uint8_t can_data[8] = {0}; // CAN verisi için buffer
 
     if (writeDataType && cJSON_IsString(writeDataType)) {
         ESP_LOGI("PARSE_WRITE_DATA", "writeDataType: %s", writeDataType->valuestring);
@@ -729,37 +806,85 @@ void parse_write_data(cJSON* json) {
         ESP_LOGI("PARSE_WRITE_DATA", "writeNo: %d", writeNo->valueint);
     }
 
-    if (writeDataType && cJSON_IsString(writeDataType) && writeNo && cJSON_IsNumber(writeNo)) {
+    if (writeDataType && cJSON_IsString(writeDataType)) {
         if (strcmp(writeDataType->valuestring, "Output") == 0) {
+            if (!(writeNo && cJSON_IsNumber(writeNo))) {
+                ESP_LOGW("PARSE_WRITE_DATA", "Output writeNo missing/invalid");
+                return;
+            }
             if (writeData && cJSON_IsNumber(writeData)) {
+                const uint8_t output_index = (uint8_t)writeNo->valueint;
+                if (output_index >= 16) {
+                    ESP_LOGW("PARSE_WRITE_DATA", "Invalid output index: %u", output_index);
+                    return;
+                }
+                if (!hexnet_io_profile_relay_slot_enabled(output_index)) {
+                    ESP_LOGW("PARSE_WRITE_DATA", "Relay slot %u pasif (profil)", output_index);
+                    return;
+                }
                 ESP_LOGI("PARSE_WRITE_DATA", "Output Value: %d", writeData->valueint);
 
                 if ((uint8_t)writeData->valueint) {
-                    outputsFromBle |= (1 << (uint8_t)writeNo->valueint);  // set bit at index
-                    ESP_LOGI(EXAMPLE_TAG, "Setting output %d to ON simoutput: %d", (uint8_t)writeNo->valueint , outputsFromBle);
+                    outputsFromBle |= (1 << output_index);  // set bit at index
+                    ESP_LOGI(EXAMPLE_TAG, "Setting output %d to ON simoutput: %d", output_index, outputsFromBle);
                 } else {
-                    outputsFromBle &= ~(1 << (uint8_t)writeNo->valueint); // clear bit at index
+                    outputsFromBle &= ~(1 << output_index); // clear bit at index
                 }
+                // Keep CAN state mirror updated so IO keeps working even if no CAN RX data arrives.
+                set_outputs(outputsFromBle);
             }
-        } else if (strcmp(writeDataType->valuestring, "Dim") == 0) {
+        } else if (strcmp(writeDataType->valuestring, "Dim") == 0 || strcmp(writeDataType->valuestring, "Dimmer") == 0) {
+            if (!(writeNo && cJSON_IsNumber(writeNo))) {
+                ESP_LOGW("PARSE_WRITE_DATA", "Dim writeNo missing/invalid");
+                return;
+            }
             if (writeData && cJSON_IsNumber(writeData)) {
-                ESP_LOGI("PARSE_WRITE_DATA", "Dim Value: %d", writeData->valueint);
-                dimsDataBuffer[(uint8_t)writeNo->valueint] = (uint8_t)writeData->valueint;
+                const uint8_t dim_index = (uint8_t)writeNo->valueint;
+                if (dim_index >= 4) {
+                    ESP_LOGW("PARSE_WRITE_DATA", "Invalid dim index: %u", dim_index);
+                    return;
+                }
+                if (!hexnet_io_profile_dim_slot_enabled(dim_index)) {
+                    ESP_LOGW("PARSE_WRITE_DATA", "Dim slot %u pasif (profil)", dim_index);
+                    return;
+                }
+                const uint8_t dim_value = (uint8_t)((writeData->valueint < 0) ? 0 : (writeData->valueint > 100 ? 100 : writeData->valueint));
+                ESP_LOGI("PARSE_WRITE_DATA", "Dim Value: %d", dim_value);
+                dimsDataBuffer[dim_index] = dim_value;
+                set_dimmable_output(dim_index, dim_value);  // Sync to CAN simultaneously
+                ESP_LOGI("PARSE_WRITE_DATA", "Dim[%u] synced to CAN: %d%%", dim_index, dim_value);
             }
         } else if (strcmp(writeDataType->valuestring, "RGB") == 0) {
             cJSON* rgbArray = cJSON_GetObjectItem(json, "writeData");
-            if (rgbArray && cJSON_IsArray(rgbArray) && cJSON_GetArraySize(rgbArray) == 3) {
-                rgbBuffer[0] = (uint8_t)cJSON_GetArrayItem(rgbArray, 0)->valueint; // Red
-                rgbBuffer[1] = (uint8_t)cJSON_GetArrayItem(rgbArray, 1)->valueint; // Green
-                rgbBuffer[2] = (uint8_t)cJSON_GetArrayItem(rgbArray, 2)->valueint; // Blue
-                rgbEna = 1; // Enable RGB
-                rgbBuffer[3] = rgbEna; // RgbEnable
-                //rgbBuffer[3] = (uint8_t)cJSON_GetArrayItem(rgbArray, 3)->valueint; // RgbEnable
-                
-                ESP_LOGI("PARSE_WRITE_DATA", "RGB Values: R=%d, G=%d, B=%d rgbEna = %d", rgbBuffer[0], rgbBuffer[1], rgbBuffer[2], rgbEna);
+            if (rgbArray && cJSON_IsArray(rgbArray) && cJSON_GetArraySize(rgbArray) >= 3) {
+                const int arraySize = cJSON_GetArraySize(rgbArray);
+                const int r = cJSON_GetArrayItem(rgbArray, 0)->valueint;
+                const int g = cJSON_GetArrayItem(rgbArray, 1)->valueint;
+                const int b = cJSON_GetArrayItem(rgbArray, 2)->valueint;
+                const int ena = (arraySize >= 4 && cJSON_IsNumber(cJSON_GetArrayItem(rgbArray, 3)))
+                    ? cJSON_GetArrayItem(rgbArray, 3)->valueint
+                    : 1;
 
+                rgbBuffer[0] = (uint8_t)((r < 0) ? 0 : (r > 255 ? 255 : r)); // Red
+                rgbBuffer[1] = (uint8_t)((g < 0) ? 0 : (g > 255 ? 255 : g)); // Green
+                rgbBuffer[2] = (uint8_t)((b < 0) ? 0 : (b > 255 ? 255 : b)); // Blue
+                rgbEna = (uint8_t)(ena ? 1 : 0);
+                rgbBuffer[3] = rgbEna; // RgbEnable
+                set_rgb_values(rgbBuffer[0], rgbBuffer[1], rgbBuffer[2], rgbBuffer[3]);
+
+                ESP_LOGI("PARSE_WRITE_DATA", "RGB Values: R=%d, G=%d, B=%d rgbEna=%d", rgbBuffer[0], rgbBuffer[1], rgbBuffer[2], rgbEna);
             } else {
-                ESP_LOGE("PARSE_WRITE_DATA", "RGB writeData must be an array of 4 values.");
+                ESP_LOGE("PARSE_WRITE_DATA", "RGB writeData must be an array of at least 3 values.");
+            }
+        } else if (strcmp(writeDataType->valuestring, "Motor") == 0) {
+            if (!hexnet_io_profile_motor_enabled()) {
+                ESP_LOGW("PARSE_WRITE_DATA", "Motor pasif (profil)");
+                return;
+            }
+            if (writeData && cJSON_IsNumber(writeData)) {
+                const int motorCmd = writeData->valueint;
+                set_motordata((motorCmd >= 0 && motorCmd <= 2) ? motorCmd : 0);
+                ESP_LOGI("PARSE_WRITE_DATA", "Motor command: %d", get_motorData());
             }
         } else {
             ESP_LOGI("PARSE_WRITE_DATA", "Unknown writeDataType: %s", writeDataType->valuestring);
@@ -834,25 +959,18 @@ void parse_configuration_data(cJSON* json) {
         ESP_LOGI("PARSE_CONFIGURATION_DATA", "Theme: %s", theme->valuestring);
     }
     
-    // Save to NVS using the global variables
-    save_panel_configuration_to_nvs(numOfOutputs, outputsBuf, numOfSensors, sensorsBuf, numOfDims, dimsBuf);
-    
-    ESP_LOGI("PARSE_CONFIGURATION_DATA", "Updated globals - numOfOutputs: %d, numOfSensors: %d, numOfDims: %d", 
-             numOfOutputs, numOfSensors, numOfDims);
+    (void)hexnet_io_profile_apply_json(json, HEXNET_IO_LINK_BLE);
 
-    // Copy buffers to global buffers
-    for (int i = 0; i < numOfOutputs && i < 16; i++)
-    {
-        outputsBuffer[i] = outputsBuf[i];
-    }
-    for (int i = 0; i < numOfDims && i < 4; i++)
-    {
-        dimsBuffer[i] = dimsBuf[i];
-    }
-    for (int i = 0; i < numOfSensors && i < 5; i++)
-    {
-        sensorsBuffer[i] = sensorsBuf[i];
-    }
+    hexnet_io_profile_sync_legacy_globals();
+
+    ESP_LOGI(
+        "PARSE_CONFIGURATION_DATA",
+        "Profil kaydedildi (BLE) - R=%d S=%d D=%d motor=%d rgb=%d",
+        numOfOutputs,
+        numOfSensors,
+        numOfDims,
+        hexnet_io_profile_motor_enabled(),
+        hexnet_io_profile_rgb_enabled());
     
 }
 
@@ -868,6 +986,14 @@ static void parse_rules_data(cJSON* json) {
 char* create_json_data_packet(const uint16_t* regs_data, int numOfOutputs, int numOfDims, int numOfSensors, bool slaveConnectionStatus, int themeType, int numberOfNotifications, cJSON* notifications) {
     // Create a JSON object
     cJSON *json = cJSON_CreateObject();
+
+    /* Platform eşleştirme / resolve-mqtt Wi-Fi STA MAC kullanır; BLE adresi farklı olabilir. */
+    char wifi_mac[24] = {0};
+    if (hexnet_format_wifi_mac(wifi_mac, sizeof(wifi_mac))) {
+        cJSON_AddStringToObject(json, "mac", wifi_mac);
+    } else {
+        cJSON_AddStringToObject(json, "mac", "");
+    }
 
     // Add number of outputs, dims, sensors, slave connection status, and theme type to the JSON object
     cJSON_AddStringToObject(json, "slvConn", "Yes");
@@ -892,14 +1018,10 @@ char* create_json_data_packet(const uint16_t* regs_data, int numOfOutputs, int n
     cJSON_AddItemToObject(json, "senNB", sensornames);
 
 
-    // Fetch outputsBuffer from regs_data
+    // Fetch outputsBuffer from regs_data - simultaneous BLE + CAN support
     int buf[16];
     for (int i = 0; i < numOfOutputs; i++) {
-#if BLE_ENB 
-        buf[i] = get_outputsFromBle() >> i & 0x01; // Get the output state from the bitmask
-#else
-        buf[i] = get_outputs() >> i & 0x01; // Get the output state from the bitmask
-#endif
+        buf[i] = get_outputs() >> i & 0x01; // Get the output state from shared merged state
     }
     cJSON *outputs = cJSON_CreateIntArray(buf, numOfOutputs);
     cJSON_AddItemToObject(json, "outDB", outputs);
@@ -912,8 +1034,19 @@ char* create_json_data_packet(const uint16_t* regs_data, int numOfOutputs, int n
     cJSON_AddItemToObject(json, "dDB", dims);
 
 
+    // BLE/mobile: first 2 sensor slots are always temperature + humidity from IO module sensor channel.
+    // Keep remaining sensor slots from existing analog map (water levels etc.) without changing MQTT/CAN logic.
     for (int i = 0; i < numOfSensors; i++) {
-        buf[i] = get_analog_input(i);
+        if (i == 0) {
+            int t = get_sensorTemp();
+            buf[i] = (t < 0) ? 0 : (t > 255 ? 255 : t);
+        } else if (i == 1) {
+            int h = get_sensorHumidity();
+            buf[i] = (h < 0) ? 0 : (h > 100 ? 100 : h);
+        } else {
+            const int analogIdx = i - 2;
+            buf[i] = (analogIdx >= 0 && analogIdx < 4) ? get_analog_input((uint8_t)analogIdx) : 0;
+        }
     }
     cJSON *sensors = cJSON_CreateIntArray(buf, numOfSensors);
     cJSON_AddItemToObject(json, "sDB", sensors);
@@ -927,6 +1060,19 @@ char* create_json_data_packet(const uint16_t* regs_data, int numOfOutputs, int n
     // Add rgbBuffer to the JSON object
     cJSON *rgb = cJSON_CreateIntArray(rgbBuffer, 4);
     cJSON_AddItemToObject(json, "RGBDB", rgb);
+
+    const hexnet_io_profile_t *prof = hexnet_io_profile_get();
+    if (prof) {
+        cJSON_AddNumberToObject(json, "motorEn", prof->motor_enabled);
+        cJSON_AddNumberToObject(json, "rgbEn", prof->rgb_enabled);
+        cJSON_AddNumberToObject(json, "tankN", prof->num_tanks);
+        cJSON_AddNumberToObject(json, "rMask", prof->relay_enable_mask);
+        cJSON_AddNumberToObject(json, "dMask", prof->dim_enable_mask);
+        cJSON_AddNumberToObject(json, "sMask", prof->sensor_enable_mask);
+        cJSON_AddNumberToObject(json, "tMask", prof->tank_enable_mask);
+        cJSON_AddNumberToObject(json, "ioLink", prof->link_flags);
+    }
+    hexnet_io_profile_append_to_json(json, "io");
     
 
 
@@ -953,57 +1099,12 @@ void get_data_json_format(const uint16_t* regs_data, int txPacketType, char** js
 } 
 
 
-// Function to read an integer from NVS
-esp_err_t nvs_read_int(const char* key, int* value) {
-    nvs_handle_t nvs_handle;
-    esp_err_t err;
-    int32_t temp_value;
 
-    // Open NVS handle
-    err = nvs_open("storage", NVS_READONLY, &nvs_handle);
-    if (err != ESP_OK) {
-        ESP_LOGE("NVS_WRITE_PARAMS", "Error opening NVS handle: %s", esp_err_to_name(err));
-        return err;
-    }
 
-    // Read integer from NVS
-    err = nvs_get_i32(nvs_handle, key, &temp_value);
-    if (err == ESP_OK) {
-        *value = (int)temp_value;
-    }
-    nvs_close(nvs_handle);
-    return err;
-}
-
-// Function to write an integer to NVS
-esp_err_t nvs_write_int(const char* key, int value) {
-    nvs_handle_t nvs_handle;
-    esp_err_t err;
-
-    // Open NVS handle
-    err = nvs_open("storage", NVS_READWRITE, &nvs_handle);
-    if (err != ESP_OK) {
-        ESP_LOGE("NVS_WRITE_PARAMS", "Error opening NVS handle: %s", esp_err_to_name(err));
-        return err;
-    }
-
-    // Write integer to NVS
-    err = nvs_set_i32(nvs_handle, key, value);
-    if (err != ESP_OK) {
-        ESP_LOGE("NVS_WRITE_PARAMS", "Error writing integer to NVS: %s", esp_err_to_name(err));
-        nvs_close(nvs_handle);
-        return err;
-    }
-
-    // Commit written value
-    err = nvs_commit(nvs_handle);
-    nvs_close(nvs_handle);
-    return err;
-}
 
 // Function to read configuration data from NVS
 void load_panel_configuration_from_nvs(int *totalOutpts, int buffer1[16], int *totalSensors, int buffer2[5], int *totalDims, int buffer3[4]) {
-    int32_t value;
+    int value;
     
     // Read totalOutpts from NVS
     if (nvs_read_int("numOfOutputs", &value) != ESP_OK || value < 0 || value > 16) {
@@ -1068,7 +1169,7 @@ void load_panel_configuration_from_nvs(int *totalOutpts, int buffer1[16], int *t
 
 // Load the theme settings from NVS
 void load_theme_configuration_from_nvs(int* themeType, int* wallpaperEnabled, int* wallpaperTimeIndex) {
-    int32_t value;
+    int value;
 
     // Read themeType from NVS
     if (nvs_read_int("thmTyp", &value) != ESP_OK || value < 0 || value > 1) {
@@ -1175,21 +1276,16 @@ void save_theme_configuration_to_nvs(int16_t* themeType, uint16_t* wallpaperEnab
 void ble_init(void)
 {
     esp_err_t ret;
-    esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
 
-
-
-    // Initialize NVS
-    ret = nvs_flash_init();
-    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-        ESP_ERROR_CHECK(nvs_flash_erase());
-        ret = nvs_flash_init();
-    }
-    ESP_ERROR_CHECK( ret );
-
-    load_panel_configuration_from_nvs(&numOfOutputs, outputsBuffer, &numOfSensors, sensorsBuffer, &numOfDims, dimsBuffer);
+    hexnet_io_profile_sync_legacy_globals();
     load_theme_configuration_from_nvs(&panelThemeType, &panelWallpaperEnable, &panelWallpaperTime);
 
+#if !BLE_ENB
+    ESP_LOGI(GATTS_TABLE_TAG, "BLE disabled (BLE_ENB=0); panel config loaded from NVS");
+    return;
+#endif
+
+    esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
 
     ESP_ERROR_CHECK(esp_bt_controller_mem_release(ESP_BT_MODE_CLASSIC_BT));
 
@@ -1242,9 +1338,18 @@ void ble_init(void)
     return;
 }
 
-// Function to get the connection status
-bool get_connection_status() {
+bool get_connection_status(void)
+{
     return is_connected;
+}
+
+bool hexnet_ble_is_connected(void)
+{
+#if BLE_ENB
+    return is_connected;
+#else
+    return false;
+#endif
 }
 
 

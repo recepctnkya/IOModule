@@ -1,4 +1,7 @@
+#define LOG_LOCAL_LEVEL HEXNET_LOG_LEVEL_OTHER
+#include "hexnet_log.h"
 #include "hexnet_canbus.h" // Include the Waveshare TWAI port library
+#include "hexnet_nvs.h"
 #include "stdio.h"
 #include "stdint.h"
 #include "string.h"
@@ -37,6 +40,17 @@ extern int motorDataUpdateCounter;
 int sensorTemp = 0;
 int sensorHumidity = 0;
 
+int totalOutps_config   = 0;
+int totalSensors_config = 0;
+int totalDims_config    = 0;
+uint8_t output_config[16];
+uint8_t sensor_config[5];
+uint8_t dim_config[4];
+
+uint16_t output_received_mask = 0;
+uint8_t sensor_received_mask = 0;
+uint8_t dim_received_mask = 0;
+
 int get_motorData() {
     return motorData;
 }
@@ -50,6 +64,12 @@ void set_sensorTemp(int val) {
 void set_sensorHumidity(int val) {
     sensorHumidity = val;
 }   
+int get_sensorTemp(void) {
+    return sensorTemp;
+}
+int get_sensorHumidity(void) {
+    return sensorHumidity;
+}
 // Helper function to populate Frame 1 data
 void populate_frame_1(uint16_t voltage, uint16_t outputs, uint16_t inputs) {
     frame_1_data[0] = (voltage >> 8) & 0xFF;  // Voltage MSB
@@ -162,11 +182,28 @@ uint16_t get_outputs() {
     return simoutputs;
 }
 
+void set_outputs(uint16_t outputs) {
+    simoutputs = outputs;
+}
+
 uint8_t get_dimmable_output(uint8_t index) {
     if (index < 4) {
         return dimmable_outputs[index];
     }
     return 0;
+}
+
+void set_dimmable_output(uint8_t index, uint8_t value) {
+    if (index < 4) {
+        dimmable_outputs[index] = value;
+    }
+}
+
+void set_rgb_values(uint8_t red, uint8_t green, uint8_t blue, uint8_t enable) {
+    r = red;
+    g = green;
+    b = blue;
+    rgb_enable = enable;
 }
 
 uint8_t get_analog_input(uint8_t index) {
@@ -186,53 +223,174 @@ void get_voltage(uint16_t voltage) {
     simvoltage = voltage;
 }
 
-int get_sensorTemp(void)     { return sensorTemp; }
-int get_sensorHumidity(void) { return sensorHumidity; }
-
-/* simvoltage is stored as voltage * 100 (e.g. 1245 → 12.45 V) */
-float get_battery_v(void) { return simvoltage / 100.0f; }
-
-void set_outputs(uint16_t val) { simoutputs = val; }
-
-void set_dimmable_output(uint8_t index, uint8_t val) {
-    if (index < 4) dimmable_outputs[index] = val;
-}
-
-void set_rgb(uint8_t r_val, uint8_t g_val, uint8_t b_val, uint8_t en) {
-    r = r_val; g = g_val; b = b_val; rgb_enable = en;
+uint16_t get_voltage_value(void) {
+    return simvoltage;
 }
 
 
-void handle_rx_message(twai_message_t message) {
-    // CAN frame id 0x720: (index, val) -> update analog_inputs[index]
-    if (message.identifier == 0x720 && message.data_length_code >= 2) {
+
+//############################ NVS FUNCTIONS #########################################################################
+// Function to save configuration data to NVS
+void save_panel_configuration_to_nvs_can(int totalOutps, uint8_t buffer1[16], int totalSensors, uint8_t buffer2[5], int totalDims, uint8_t buffer3[4]) {
+    // Ensure the values do not exceed the maximum allowed sizes
+    if (totalOutps > 16) {
+        totalOutps = 16;
+    }
+    if (totalSensors > 5) {
+        totalSensors = 5;
+    }
+    if (totalDims > 4) {
+        totalDims = 4;
+    }
+
+    // Save totalOutps to NVS
+    nvs_write_int("numOfOutputs", totalOutps);
+
+    // Save buffer1 to NVS
+    for (int i = 0; i < 16; i++) {
+        if (buffer1[i] < 1 || buffer1[i] > 18) {
+            buffer1[i] = 1; // Set to default value if out of range
+        }
+        char key[16];
+        snprintf(key, sizeof(key), "outBuf%d", i);
+        nvs_write_int(key, buffer1[i]);
+    }
+
+    // Save totalSensors to NVS
+    nvs_write_int("numSens", totalSensors);
+
+    // Save buffer2 to NVS
+    for (int i = 0; i < 5; i++) {
+        if (buffer2[i] < 0 || buffer2[i] > 1) {
+            buffer2[i] = 0; // Set to default value if out of range
+        }
+        char key[16];
+        snprintf(key, sizeof(key), "sensBuf%d", i);
+        nvs_write_int(key, buffer2[i]);
+    }
+
+    // Save totalDims to NVS
+    nvs_write_int("numDims", totalDims);
+
+    // Save buffer3 to NVS
+    for (int i = 0; i < 4; i++) {
+        if (buffer3[i] < 0 || buffer3[i] > 8) {
+            buffer3[i] = 0; // Set to default value if out of range
+        }
+        char key[16];
+        snprintf(key, sizeof(key), "dimsBuf%d", i);
+        nvs_write_int(key, buffer3[i]);
+    }
+
+
+
+}
+
+void handle_rx_message(twai_message_t message)
+{
+    // Runtime outputs
+    if (message.identifier == 0x720 && message.data_length_code >= 2)
+    {
         uint8_t index = message.data[0];
         uint8_t val = message.data[1];
-        if (val) {
-            simoutputs |= (1 << index);  // set bit at index
-            ESP_LOGI(EXAMPLE_TAG, "Setting output %d to ON simoutput: %d", index , simoutputs);
-        } else {
-            simoutputs &= ~(1 << index); // clear bit at index
+
+        if (val)
+        {
+            simoutputs |= (1 << index);
+            ESP_LOGI(TAG, "Setting output %d to ON simoutput: %d", index, simoutputs);
+        }
+        else
+        {
+            simoutputs &= ~(1 << index);
         }
     }
-    // CAN frame id 0x730: (index, val) -> update dimmable_outputs[index]
-    else if (message.identifier == 0x730 && message.data_length_code >= 2) {
+
+    // Runtime dimming
+    else if (message.identifier == 0x730 && message.data_length_code >= 2)
+    {
         uint8_t index = message.data[0];
         uint8_t val = message.data[1];
+
         dimmable_outputs[index] = val;
-        ESP_LOGI(EXAMPLE_TAG, "Setting dimmable %d to ON simoutput: %d", index , val);
+
+        ESP_LOGI(TAG, "Setting dimmable %d to value %d", index, val);
     }
-    // CAN frame id 0x740: (r, g, b) -> update RGB values
-    else if (message.identifier == 0x740 && message.data_length_code >= 3) {
+
+    // Runtime RGB
+    else if (message.identifier == 0x740 && message.data_length_code >= 3)
+    {
         r = message.data[0];
         g = message.data[1];
         b = message.data[2];
-        rgb_enable = message.data[3]; // Update RGB enable flag
+        rgb_enable = message.data[3];
+
+        ESP_LOGI(TAG, "Setting RGB to R:%d G:%d B:%d Enable:%d", r, g, b, rgb_enable);
     }
-    else if (message.identifier == 0x750 && message.data_length_code >= 1) {
+
+    // Runtime motor
+    else if (message.identifier == 0x750 && message.data_length_code >= 1)
+    {
         motorData = message.data[0];
-        motorDataUpdateCounter = 0; // Reset the update counter on new data
+        motorDataUpdateCounter = 0;
     }
+
+    // ==========================
+    // PANEL CONFIGURATION RX
+    // ==========================
+
+    else if (message.identifier == 0x799 && message.data_length_code >= 3)
+    {
+        totalOutps_config = message.data[0];
+        totalSensors_config = message.data[1];
+        totalDims_config = message.data[2];
+        ESP_LOGI(TAG, "CFG TOTALS O:%d S:%d D:%d", totalOutps_config, totalSensors_config, totalDims_config);
+    }
+
+    else if (message.identifier == 0x800  && message.data_length_code >= 2)
+    {
+        uint8_t index = message.data[0];
+        uint8_t value = message.data[1];
+
+        if (index >= 1 && index <= totalOutps_config)
+        {
+            output_config[index - 1] = value;
+            output_received_mask |= (1 << (index - 1));
+
+        }
+        printf("CFG Output[%d] = %d\n", index - 1, value);
+    }
+
+    else if (message.identifier == 0x801  && message.data_length_code >= 2)
+    {
+        uint8_t index = message.data[0];
+        uint8_t value = message.data[1];
+
+        if (index >= 1 && index <= totalSensors_config)
+        {
+            sensor_config[index - 1] = value;
+            sensor_received_mask |= (1 << (index - 1));
+        }
+        printf("CFG Sensor[%d] = %d\n", index - 1, value);
+    }
+
+    else if (message.identifier == 0x802  && message.data_length_code >= 2)
+    {
+        uint8_t index = message.data[0];
+        uint8_t value = message.data[1];
+
+        if (index >= 1 && index <= totalDims_config)
+        {
+            dim_config[index - 1] = value;
+            dim_received_mask |= (1 << (index - 1));
+            if(index == totalDims_config) {
+                printf("All dim configs received. Output config mask:\n");
+                //save to nvs
+                save_panel_configuration_to_nvs_can(totalOutps_config, output_config, totalSensors_config, sensor_config, totalDims_config, dim_config);
+            }
+        }
+        printf("CFG Dim[%d] = %d\n", index - 1, value);
+    }
+
 }
 
 // Error recovery function
@@ -350,32 +508,32 @@ void receive_frames_task(void *pvParameter)
 
             // Handle alerts
             if (alerts_triggered & TWAI_ALERT_ERR_PASS) {
-                ESP_LOGW(EXAMPLE_TAG,"Alert: TWAI controller has become error passive.");
+                ESP_LOGW(TAG,"Alert: TWAI controller has become error passive.");
                 check_and_recover_from_errors();
             }
             
             if (alerts_triggered & TWAI_ALERT_BUS_ERROR) {
-                ESP_LOGW(EXAMPLE_TAG,"Alert: A (Bit, Stuff, CRC, Form, ACK) error has occurred on the bus.");
-                ESP_LOGW(EXAMPLE_TAG,"Bus error count: %"PRIu32, twaistatus.bus_error_count);
+                ESP_LOGW(TAG,"Alert: A (Bit, Stuff, CRC, Form, ACK) error has occurred on the bus.");
+                ESP_LOGW(TAG,"Bus error count: %"PRIu32, twaistatus.bus_error_count);
                 check_and_recover_from_errors();
             }
 
             if (alerts_triggered & TWAI_ALERT_RX_QUEUE_FULL) {
-                ESP_LOGW(EXAMPLE_TAG,"Alert: The RX queue is full causing a received frame to be lost.");
-                ESP_LOGW(EXAMPLE_TAG,"RX buffered: %"PRIu32, twaistatus.msgs_to_rx);
-                ESP_LOGW(EXAMPLE_TAG,"RX missed: %"PRIu32, twaistatus.rx_missed_count);
-                ESP_LOGW(EXAMPLE_TAG,"RX overrun %"PRIu32, twaistatus.rx_overrun_count);
+                printf("Alert: The RX queue is full causing a received frame to be lost");
+                printf("RX buffered: %"PRIu32, twaistatus.msgs_to_rx);
+                printf("RX missed: %"PRIu32, twaistatus.rx_missed_count);
+                printf("RX overrun %"PRIu32, twaistatus.rx_overrun_count);
                 
                 // Clear the queue aggressively to prevent further issues
                 int cleared_count = 0;
                 while (twai_receive(&message, 0) == ESP_OK) {
                     cleared_count++;
                     // Process the message if it's important, otherwise discard
-                    if (message.identifier == 0x720 || message.identifier == 0x730 || message.identifier == 0x740) {
+                    if (message.identifier == 0x720 || message.identifier == 0x730 || message.identifier == 0x740 || message.identifier == 0x800 || message.identifier == 0x801 || message.identifier == 0x802) {
                         handle_rx_message(message);
                     }
                 }
-                ESP_LOGW(EXAMPLE_TAG,"Cleared %d messages from RX queue", cleared_count);
+                ESP_LOGW(TAG,"Cleared %d messages from RX queue", cleared_count);
             }
 
             // Check if message is received
@@ -387,7 +545,7 @@ void receive_frames_task(void *pvParameter)
         } else if (alert_result == ESP_ERR_TIMEOUT) {
             // Timeout is normal, continue monitoring
         } else {
-            ESP_LOGE(EXAMPLE_TAG, "Error reading alerts: 0x%x", alert_result);
+            ESP_LOGE(TAG, "Error reading alerts: 0x%x", alert_result);
         }
         
         // Monitor CAN health periodically
@@ -397,16 +555,16 @@ void receive_frames_task(void *pvParameter)
         twai_status_info_t status;
         twai_get_status_info(&status);
         if (status.msgs_to_rx > 3) { // If more than 3 messages queued
-            ESP_LOGW(EXAMPLE_TAG, "RX queue getting full (%"PRIu32" msgs), clearing proactively", status.msgs_to_rx);
+            ESP_LOGW(TAG, "RX queue getting full (%"PRIu32" msgs), clearing proactively", status.msgs_to_rx);
             int cleared_count = 0;
             while (twai_receive(&message, 0) == ESP_OK && cleared_count < 5) { // Clear up to 5 messages
                 cleared_count++;
-                if (message.identifier == 0x720 || message.identifier == 0x730 || message.identifier == 0x740) {
+                if (message.identifier == 0x720 || message.identifier == 0x730 || message.identifier == 0x740 || message.identifier == 0x800 || message.identifier == 0x801 || message.identifier == 0x802) {
                     handle_rx_message(message);
                 }
             }
             if (cleared_count > 0) {
-                ESP_LOGW(EXAMPLE_TAG, "Proactively cleared %d messages from RX queue", cleared_count);
+                ESP_LOGW(TAG, "Proactively cleared %d messages from RX queue", cleared_count);
             }
         }
         
@@ -431,12 +589,12 @@ static void send_message()
     esp_err_t result = twai_transmit(&message, pdMS_TO_TICKS(1000));
     if (result == ESP_OK)
     {
-        ESP_LOGD(EXAMPLE_TAG, "Message queued for transmission successfully");
+        ESP_LOGD(TAG, "Message queued for transmission successfully");
         last_successful_tx = esp_timer_get_time() / 1000; // Update successful TX timestamp
     }
     else
     {
-        ESP_LOGE(EXAMPLE_TAG, "Failed to queue message for transmission: 0x%x", result);
+        ESP_LOGE(TAG, "Failed to queue message for transmission: 0x%x", result);
         check_and_recover_from_errors();
     }
 }
@@ -449,18 +607,18 @@ esp_err_t waveshare_twai_init()
     // Install TWAI driver
     ret = twai_driver_install(&g_config, &t_config, &f_config);
     if (ret == ESP_OK) {
-        ESP_LOGI(EXAMPLE_TAG,"Driver installed");
+        ESP_LOGI(TAG,"Driver installed");
     } else {
-        ESP_LOGE(EXAMPLE_TAG,"Failed to install driver: 0x%x", ret);
+        ESP_LOGE(TAG,"Failed to install driver: 0x%x", ret);
         return ret;
     }
     
     // Start TWAI driver
     ret = twai_start();
     if (ret == ESP_OK) {
-        ESP_LOGI(EXAMPLE_TAG,"Driver started");
+        ESP_LOGI(TAG,"Driver started");
     } else {
-        ESP_LOGE(EXAMPLE_TAG,"Failed to start driver: 0x%x", ret);
+        ESP_LOGE(TAG,"Failed to start driver: 0x%x", ret);
         twai_driver_uninstall();
         return ret;
     }
@@ -470,9 +628,9 @@ esp_err_t waveshare_twai_init()
                                TWAI_ALERT_RX_QUEUE_FULL | TWAI_ALERT_TX_FAILED | TWAI_ALERT_TX_SUCCESS;
     ret = twai_reconfigure_alerts(alerts_to_enable, NULL);
     if (ret == ESP_OK) {
-        ESP_LOGI(EXAMPLE_TAG,"CAN Alerts reconfigured");
+        ESP_LOGI(TAG,"CAN Alerts reconfigured");
     } else {
-        ESP_LOGE(EXAMPLE_TAG,"Failed to reconfigure alerts: 0x%x", ret);
+        ESP_LOGE(TAG,"Failed to reconfigure alerts: 0x%x", ret);
         twai_stop();
         twai_driver_uninstall();
         return ret;
@@ -484,7 +642,7 @@ esp_err_t waveshare_twai_init()
     
     // TWAI driver is now successfully installed and started
     driver_installed = true;
-    ESP_LOGI(EXAMPLE_TAG,"CAN bus initialization completed successfully");
+    ESP_LOGI(TAG,"CAN bus initialization completed successfully");
     return ESP_OK;           // Return success status
 }
 
@@ -493,7 +651,7 @@ esp_err_t waveshare_twai_transmit()
 {
     if (!driver_installed)
     {
-        ESP_LOGE(EXAMPLE_TAG, "Driver not installed, cannot transmit");
+        ESP_LOGE(TAG, "Driver not installed, cannot transmit");
         vTaskDelay(pdMS_TO_TICKS(1000)); // Wait before retrying
         return ESP_FAIL;                 // Return failure status
     }
@@ -509,33 +667,33 @@ esp_err_t waveshare_twai_transmit()
         // Handle alerts
         if (alerts_triggered & TWAI_ALERT_ERR_PASS)
         {
-            ESP_LOGW(EXAMPLE_TAG, "Alert: TWAI controller has become error passive.");
+            ESP_LOGW(TAG, "Alert: TWAI controller has become error passive.");
             check_and_recover_from_errors();
         }
         if (alerts_triggered & TWAI_ALERT_BUS_ERROR)
         {
-            ESP_LOGW(EXAMPLE_TAG, "Alert: A (Bit, Stuff, CRC, Form, ACK) error has occurred on the bus.");
-            ESP_LOGW(EXAMPLE_TAG, "Bus error count: %" PRIu32, twaistatus.bus_error_count);
+            ESP_LOGW(TAG, "Alert: A (Bit, Stuff, CRC, Form, ACK) error has occurred on the bus.");
+            ESP_LOGW(TAG, "Bus error count: %" PRIu32, twaistatus.bus_error_count);
             check_and_recover_from_errors();
         }
         if (alerts_triggered & TWAI_ALERT_TX_FAILED)
         {
-            ESP_LOGW(EXAMPLE_TAG, "Alert: The Transmission failed.");
-            ESP_LOGW(EXAMPLE_TAG, "TX buffered: %" PRIu32, twaistatus.msgs_to_tx);
-            ESP_LOGW(EXAMPLE_TAG, "TX error: %" PRIu32, twaistatus.tx_error_counter);
-            ESP_LOGW(EXAMPLE_TAG, "TX failed: %" PRIu32, twaistatus.tx_failed_count);
+            ESP_LOGW(TAG, "Alert: The Transmission failed.");
+            ESP_LOGW(TAG, "TX buffered: %" PRIu32, twaistatus.msgs_to_tx);
+            ESP_LOGW(TAG, "TX error: %" PRIu32, twaistatus.tx_error_counter);
+            ESP_LOGW(TAG, "TX failed: %" PRIu32, twaistatus.tx_failed_count);
             check_and_recover_from_errors();
         }
         if (alerts_triggered & TWAI_ALERT_TX_SUCCESS)
         {
-            ESP_LOGD(EXAMPLE_TAG, "Alert: The Transmission was successful.");
-            ESP_LOGD(EXAMPLE_TAG, "TX buffered: %" PRIu32, twaistatus.msgs_to_tx);
+            ESP_LOGD(TAG, "Alert: The Transmission was successful.");
+            ESP_LOGD(TAG, "TX buffered: %" PRIu32, twaistatus.msgs_to_tx);
             last_successful_tx = esp_timer_get_time() / 1000; // Update successful TX timestamp
         }
     } else if (alert_result == ESP_ERR_TIMEOUT) {
         // Timeout is normal, continue
     } else {
-        ESP_LOGE(EXAMPLE_TAG, "Error reading alerts: 0x%x", alert_result);
+        ESP_LOGE(TAG, "Error reading alerts: 0x%x", alert_result);
         return alert_result;
     }
 

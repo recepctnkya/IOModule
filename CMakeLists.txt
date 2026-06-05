@@ -3,7 +3,8 @@
 cmake_minimum_required(VERSION 3.16)
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
-project(mqtt_tcp_custom_outbox)
+# Hexnet IO Module — aktif geliştirme: IOModule-v0-50 (v0-30/v0-40 donduruldu)
+project(mqtt_tcp_custom_outbox VERSION "0.50.0")
 
 # Add custom outbox implementation to mqtt component
 idf_component_get_property(mqtt mqtt COMPONENT_LIB)
@@ -18,10 +19,30 @@ idf_component_get_property(pthread pthread COMPONENT_LIB)
 # And them we link the components
 target_link_libraries(${mqtt} ${pthread})
 
+<<<<<<< HEAD
+# Derleme çıktısı: vango_medium_v0_50.bin (platform katalog / OTA dosya adı)
+set(HEXNET_HW_SLUG "vango_medium")
+string(REPLACE "." ";" _hexnet_ver_parts "${PROJECT_VERSION}")
+list(GET _hexnet_ver_parts 0 _hexnet_ver_maj)
+list(GET _hexnet_ver_parts 1 _hexnet_ver_min)
+set(HEXNET_RELEASE_BIN "${HEXNET_HW_SLUG}_v${_hexnet_ver_maj}_${_hexnet_ver_min}.bin")
+
+if(TARGET ${CMAKE_PROJECT_NAME}.elf)
+    # Note: Temporarily disabled due to missing binary generation step
+    # add_custom_command(
+    #     TARGET ${CMAKE_PROJECT_NAME}.elf
+    #     POST_BUILD
+    #     COMMAND ${CMAKE_COMMAND} -E copy_if_different
+    #         "${CMAKE_BINARY_DIR}/${CMAKE_PROJECT_NAME}.bin"
+    #         "${CMAKE_BINARY_DIR}/${HEXNET_RELEASE_BIN}"
+    #     COMMENT "Hexnet release: ${HEXNET_RELEASE_BIN}"
+    # )
+=======
 # Workaround: GCC ICE (segfault in IRA/register-allocation pass) when compiling
 # esp_lcd_panel_rgb.c with -Og.  Compile the whole esp_lcd component at -O0.
 # esp_lcd is not performance-critical for this project so the trade-off is fine.
 if(TARGET __idf_esp_lcd)
     idf_component_get_property(esp_lcd_lib esp_lcd COMPONENT_LIB)
     target_compile_options(${esp_lcd_lib} PRIVATE -O0)
+>>>>>>> 4ada128a93d42e7407371d5f2fbc719e66ac861f
 endif()

@@ -14,13 +14,11 @@
 #include "driver/i2c.h"  // I2C driver header 
 #include "driver/gpio.h" // GPIO driver header 
 
-/* --------------------- Definitions and static variables ------------------ */
-// Example Configuration 
-#define TX_GPIO_NUM 18 // Transmit GPIO pin number 
-#define RX_GPIO_NUM 17 // Receive GPIO pin number 
+#include "hexnet_io_map.h"
 
-// #define TX_GPIO_NUM 15 // Transmit GPIO pin number 
-// #define RX_GPIO_NUM 16 // Receive GPIO pin number 
+/* --------------------- CAN / TWAI (see hexnet_io_map.h) ------------------ */
+#define TX_GPIO_NUM HEXNET_IO_CAN_TX_GPIO
+#define RX_GPIO_NUM HEXNET_IO_CAN_RX_GPIO
 
 #define EXAMPLE_TAG "TWAI Master"              // Log tag for TWAI master 
 
@@ -49,21 +47,19 @@ uint8_t get_g_value();
 uint8_t get_b_value();
 uint8_t get_rgb_enable(); // Get RGB enable flag
 uint16_t get_outputs();
+void set_outputs(uint16_t outputs);
 uint8_t get_dimmable_output(uint8_t index); // Get outputs value
+void set_dimmable_output(uint8_t index, uint8_t value);
 uint8_t get_analog_input(uint8_t index); // Get analog input value
 int get_motorData();
 void set_motordata(int val);
+void set_rgb_values(uint8_t red, uint8_t green, uint8_t blue, uint8_t enable);
 void set_analog_input(uint8_t index, uint8_t value); // Set analog input value
 void set_sensorTemp(int val);
-void set_sensorHumidity(int val);
-int  get_sensorTemp(void);
-int  get_sensorHumidity(void);
-void get_voltage(uint16_t voltage); // Send voltage value to CAN bus (confusingly named setter)
-float get_battery_v(void);          // Returns battery voltage in volts (e.g. 12.45)
-
-// MQTT control setters
-void set_outputs(uint16_t val);
-void set_dimmable_output(uint8_t index, uint8_t val);
-void set_rgb(uint8_t r, uint8_t g, uint8_t b, uint8_t en);
+void set_sensorHumidity(int val);  
+int get_sensorTemp(void);
+int get_sensorHumidity(void);
+void get_voltage(uint16_t voltage); // Send voltage value to CAN bus
+uint16_t get_voltage_value(void);
 
 #endif // End of header guard 

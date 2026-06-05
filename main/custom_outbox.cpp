@@ -15,6 +15,8 @@
 #include <string>
 #include <memory_resource>
 
+#define LOG_LOCAL_LEVEL HEXNET_LOG_LEVEL_OTHER
+#include "hexnet_log.h"
 #include "esp_log.h"
 #include "mqtt_outbox.h"
 

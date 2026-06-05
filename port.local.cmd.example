@@ -1,0 +1,3 @@
+@echo off
+REM Bu dosyayi "port.local.cmd" olarak kopyalayin (git'e eklemeyin).
+set "HEXNET_FLASH_PORT=COM19"
