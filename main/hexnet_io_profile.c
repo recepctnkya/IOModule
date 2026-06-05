@@ -229,8 +229,8 @@ static esp_err_t profile_load_blob(void)
 
     profile_from_blob(&blob, &s_profile);
 
-    load_panel_configuration_from_nvs(&out_cnt, outputsBuffer, &sens_cnt, sensorsBuffer, &dim_cnt, dimsBuffer);
-    printf("###########################Legacy panel config loaded from NVS: out_cnt=%d sens_cnt=%d dim_cnt=%d\n", out_cnt, sens_cnt, dim_cnt);
+    // load_panel_configuration_from_nvs(&out_cnt, outputsBuffer, &sens_cnt, sensorsBuffer, &dim_cnt, dimsBuffer);
+    // printf("###########################Legacy panel config loaded from NVS: out_cnt=%d sens_cnt=%d dim_cnt=%d\n", out_cnt, sens_cnt, dim_cnt);
 
     return ESP_OK;
 }
