@@ -1,4 +1,4 @@
-idf_component_register(SRCS  "TroykaDHT.cpp" "dht_sensor.cpp"  "adc_monitor.c" "esp_ws28xx.c" "hexnet_canbus.c" "hexnet_bluetooth.c" "app_main.c" "wifi_prov_mgr.c"
+idf_component_register(SRCS  "TroykaDHT.cpp" "dht_sensor.cpp"  "adc_monitor.c" "esp_ws28xx.c" "hexnet_canbus.c" "hexnet_bluetooth.c" "app_main.c" "wifi_prov_mgr.c" "mqtt_handler.c"
                     INCLUDE_DIRS "."
                     REQUIRES
                     esp_system

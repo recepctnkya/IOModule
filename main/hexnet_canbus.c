@@ -186,6 +186,22 @@ void get_voltage(uint16_t voltage) {
     simvoltage = voltage;
 }
 
+int get_sensorTemp(void)     { return sensorTemp; }
+int get_sensorHumidity(void) { return sensorHumidity; }
+
+/* simvoltage is stored as voltage * 100 (e.g. 1245 → 12.45 V) */
+float get_battery_v(void) { return simvoltage / 100.0f; }
+
+void set_outputs(uint16_t val) { simoutputs = val; }
+
+void set_dimmable_output(uint8_t index, uint8_t val) {
+    if (index < 4) dimmable_outputs[index] = val;
+}
+
+void set_rgb(uint8_t r_val, uint8_t g_val, uint8_t b_val, uint8_t en) {
+    r = r_val; g = g_val; b = b_val; rgb_enable = en;
+}
+
 
 void handle_rx_message(twai_message_t message) {
     // CAN frame id 0x720: (index, val) -> update analog_inputs[index]

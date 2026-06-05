@@ -70,5 +70,8 @@
         "dht_task.h": "c",
         "hexnet_canbus.h": "c"
     },
-    "idf.currentSetup": "C:\\Users\\nakau\\esp\\v5.3\\esp-idf"
+    "idf.currentSetup": "C:\\Users\\nakau\\esp\\v5.3\\esp-idf",
+    "python.analysis.diagnosticSeverityOverrides": {
+        "reportUnusedParameter": "none"
+    }
 }

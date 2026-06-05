@@ -55,7 +55,15 @@ int get_motorData();
 void set_motordata(int val);
 void set_analog_input(uint8_t index, uint8_t value); // Set analog input value
 void set_sensorTemp(int val);
-void set_sensorHumidity(int val);  
-void get_voltage(uint16_t voltage); // Send voltage value to CAN bus
+void set_sensorHumidity(int val);
+int  get_sensorTemp(void);
+int  get_sensorHumidity(void);
+void get_voltage(uint16_t voltage); // Send voltage value to CAN bus (confusingly named setter)
+float get_battery_v(void);          // Returns battery voltage in volts (e.g. 12.45)
+
+// MQTT control setters
+void set_outputs(uint16_t val);
+void set_dimmable_output(uint8_t index, uint8_t val);
+void set_rgb(uint8_t r, uint8_t g, uint8_t b, uint8_t en);
 
 #endif // End of header guard 

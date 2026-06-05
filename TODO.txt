@@ -8,3 +8,6 @@ io modul yazilimina cikislari giris uzerinden kontrol edebilme ozelligi ekleme.
 dım guncellemelerı senkronıze olacakç
 rgb tarafı sync edilecek.
 sadece tablet ve io modul baglantisi yapacak.
+
+
+Wifi uzerinden tahmini konum belirleme.
