@@ -1,12 +1,14 @@
 #include "adc_monitor.h"
 #include "driver/adc.h"
 #include "esp_adc_cal.h"
+#include "hexnet_log.h"
+#define LOG_LOCAL_LEVEL ESP_LOG_INFO
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "hexnet_canbus.h"
 
-#define TAG "ADC_MONITOR"
+static const char *TAG = "ADC_MONITOR";
 
 // Calibration points for battery input voltage (in raw)
 #define BATTERY_RAW_AT_11V5   1017
@@ -107,7 +109,9 @@ void adc_monitor_init(void)
 void adc_monitor_task(void *param)
 {
     while (1) {
+        
         int battery_raw = read_adc1_avg(ADC2_BATTERY_CHANNEL);
+        
         float voltage = calculate_input_voltage(battery_raw);
         get_voltage((uint16_t)(voltage * 100)); // Send voltage in mV to CAN bus
         int voltage_offset = 0;
@@ -154,9 +158,8 @@ void adc_monitor_task(void *param)
 
 
 
-         ESP_LOGI(TAG, "Raw ADC values - Sensor 0: %d, Sensor 1: %d , Sensor 2: %d, Sensor 3: %d, Battery voltage: %.2f V | Water Level 1: %d%% | Water Level 2: %d%% | Water Level 3: %d%% | Water Level 4: %d%%", raw0, raw1, raw2, raw3, voltage, waterLevel1, waterLevel2, waterLevel3, waterLevel4);
-        // ESP_LOGI(TAG, "Battery voltage: %.2f V | Water Level 1: %d%% | Water Level 2: %d%%",
-        //          voltage, waterLevel1, waterLevel2);
+        //  printf("ADC Raw: S0=%d S1=%d S2=%d S3=%d | Vbat=%.2fV\n", raw0, raw1, raw2, raw3, voltage);
+        // printf("Water Levels: L1=%d%% L2=%d%% L3=%d%% L4=%d%%\n", waterLevel1, waterLevel2, waterLevel3, waterLevel4);
         
         // Update analog inputs with water level data
         update_water_levels_only(waterLevel1, waterLevel2); // DHT temps will be updated by DHT task

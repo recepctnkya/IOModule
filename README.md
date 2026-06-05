@@ -1,100 +1,53 @@
-| Supported Targets | ESP32 | ESP32-C2 | ESP32-C3 | ESP32-C6 | ESP32-H2 | ESP32-S2 | ESP32-S3 |
-| ----------------- | ----- | -------- | -------- | -------- | -------- | -------- | -------- |
+# Hexnet IO Module — IOModule-v0-50 (aktif geliştirme)
 
-# ESP-MQTT custom outbox sample application 
-(See the README.md file in the upper level 'examples' directory for more information about examples.)
+Bu klasör **tek aktif firmware geliştirme hattıdır**. Tüm yeni özellikler, OTA ve telemetri değişiklikleri burada yapılır.
 
-This example is a slightly modified version of the tcp example to show how to configure a custom outbox.
-This example connects to the broker URI selected using `idf.py menuconfig` (using mqtt tcp transport) and as a demonstration subscribes/unsubscribes and send a message on certain topic.
-(Please note that the public broker is maintained by the community so may not be always available, for details please see this [disclaimer](https://iot.eclipse.org/getting-started/#sandboxes))
+| Kavram | Değer |
+|--------|--------|
+| **Geliştirme hattı** | `IOModule-v0-50` (bu repo klasörü) |
+| **Firmware sürümü (şu an)** | `v0.50` / CMake `0.50.0` |
+| **Donanım** | ESP32-S3, `Vango-Medium` |
+| **Dondurulmuş hatlar** | `IOModule-v0-30`, `IOModule-v0-40` (yalnızca referans) |
 
-Note: If the URI equals `FROM_STDIN` then the broker address is read from stdin upon application startup (used for testing)
+## ESP-IDF CMD (Windows)
 
-It uses ESP-MQTT library which implements mqtt client to connect to mqtt broker.
+Proje klasöründe çift tık veya **ESP-IDF CMD** içinden:
 
-## Necessary changes to customize the outbox
+| Komut | İşlev |
+|--------|--------|
+| **`idf.cmd`** | IDF ortamı + proje klasörü (shell açık kalır) |
+| **`build.cmd`** | `idf.py build` |
+| **`flash.cmd COM40`** | `idf.py -p COM40 flash` |
+| **`monitor.cmd COM40`** | `idf.py -p COM40 monitor` |
+| **`bfm.cmd COM40`** | build + flash + monitor |
+| **`YUKLE.cmd`** | Port sorar, flash |
+| **`clean.cmd`** | `idf.py fullclean` |
 
-To customize the outbox the first step is to enable it in the menuconfig option. 
+IDF yolu farklıysa: `idf_path.local.cmd.example` → `idf_path.local.cmd` kopyalayıp `IDF_PATH` düzenleyin.
 
-With this option enabled, the default implementation isn't defined and the function definition needs to be added to mqtt component. 
-Any extra dependencies needed by the new sources also need to be added to the mqtt component. Refer to the example CMakeLists.txt file
-for the details on how to do it. 
-
-## The custom outbox in the example
-
-For the sake of this example the customized outbox implements the same functionalits of the regular but using C++ as a language. 
-
-The implementation uses [C++ Polymorphic memory resources]() to control memory allocations and limit the usage of the memory. 
-
-## How to use example
-
-### Hardware Required
-
-This example can be executed on any ESP32 board, the only required interface is WiFi and connection to internet.
-
-### Configure the project
-
-* Open the project configuration menu (`idf.py menuconfig`)
-* Configure Wi-Fi or Ethernet under "Example Connection Configuration" menu. See "Establishing Wi-Fi or Ethernet Connection" section in [examples/protocols/README.md](../../README.md) for more details.
-
-Note that the mandatory configurations for this example, mqtt custom outbox and C++ exceptions are automatically added by the `sdkconfig.defaults` file.
-### Build and Flash
-
-Build the project and flash it to the board, then run monitor tool to view serial output:
-
-```
-idf.py -p PORT flash monitor
+```bat
+cd IOModule-v0-50
+idf.cmd
+build.cmd
+flash.cmd COM40
 ```
 
-(To exit the serial monitor, type ``Ctrl-]``.)
+Linux/macOS: `cd IOModule-v0-50 && . $IDF_PATH/export.sh && idf.py build`
 
-See the Getting Started Guide for full steps to configure and use ESP-IDF to build projects.
+## Derleme çıktısı (platform OTA)
 
-## Example Output
+`build\vango_medium_v0_50.bin` — donanım + sürüm adı (`vango_medium` + `v0_50` ← CMake `0.50.0`).
 
-```
-I (4635) example_common: Connected to example_netif_sta
-I (4645) example_common: - IPv4 address: 192.168.33.206,
-I (4645) example_common: - IPv6 address: fe80:0000:0000:0000:7e9e:bdff:fecf:00c0, type: ESP_IP6_ADDR_IS_LINK_LOCAL
-I (4655) Monotonic: Monotonic: 400 bytes allocated, 400 total bytes in use
-I (4665) Monotonic: Monotonic: 1000 bytes allocated, 1400 total bytes in use
-I (4675) Monotonic: Monotonic: 128 bytes allocated, 1528 total bytes in use
-I (4685) Pool: Pool: 32 bytes allocated, 32 total bytes in use
-I (4685) Monotonic: Monotonic: 7688 bytes allocated, 9216 total bytes in use
-I (4695) Monotonic: Monotonic: 128 bytes allocated, 9344 total bytes in use
-I (4705) Pool: Pool: 480 bytes allocated, 512 total bytes in use
-I (4715) Monotonic: Monotonic: 992 bytes allocated, 10336 total bytes in use
-I (4715) Monotonic: Monotonic: 128 bytes allocated, 10464 total bytes in use
-I (4725) Pool: Pool: 23 bytes allocated, 535 total bytes in use
-I (4735) MQTT_EXAMPLE: Enqueued msg_id=14345
-I (4735) Pool: Pool: 29 bytes allocated, 564 total bytes in use
-I (4745) MQTT_EXAMPLE: Enqueued msg_id=3507
-I (4745) MQTT_EXAMPLE: Other event id:7
-I (4755) main_task: Returned from app_main()
-I (5085) MQTT_EXAMPLE: MQTT_EVENT_CONNECTED
-I (5085) Pool: Pool: 23 bytes allocated, 587 total bytes in use
-I (5085) MQTT_EXAMPLE: sent publish successful, msg_id=47425
-I (5085) Pool: Pool: 18 bytes allocated, 605 total bytes in use
-I (5095) MQTT_EXAMPLE: sent subscribe successful, msg_id=60709
-I (5105) Pool: Pool: 18 bytes allocated, 623 total bytes in use
-I (5105) MQTT_EXAMPLE: sent subscribe successful, msg_id=33273
-I (5395) Pool: Pool: 23 bytes deallocated, 623 total bytes in use
-I (5395) MQTT_EXAMPLE: MQTT_EVENT_PUBLISHED, msg_id=47425
-I (6005) Pool: Pool: 18 bytes deallocated, 623 total bytes in use
-I (6005) MQTT_EXAMPLE: MQTT_EVENT_SUBSCRIBED, msg_id=60709
-I (6005) MQTT_EXAMPLE: sent publish successful, msg_id=0
-I (6015) Pool: Pool: 18 bytes deallocated, 623 total bytes in use
-I (6015) MQTT_EXAMPLE: MQTT_EVENT_SUBSCRIBED, msg_id=33273
-I (6025) MQTT_EXAMPLE: sent publish successful, msg_id=0
-I (6035) MQTT_EXAMPLE: MQTT_EVENT_DATA
-TOPIC=/topic/qos1
-DATA=data_3
-I (6315) MQTT_EXAMPLE: MQTT_EVENT_DATA
-TOPIC=/topic/qos1
-DATA=data_3
-I (6315) Pool: Pool: 23 bytes deallocated, 623 total bytes in use
-I (6315) MQTT_EXAMPLE: MQTT_EVENT_PUBLISHED, msg_id=14345
-I (6615) MQTT_EXAMPLE: MQTT_EVENT_DATA
-TOPIC=/topic/qos0
-DATA=data
-```
+Sürüm değişince dosya adı otomatik güncellenir (ör. `0.51.0` → `vango_medium_v0_51.bin`).
+
+## Telemetri `device.fw`
+
+Her yayında dolu sürüm gönderilir: `hexnet_firmware_version_string()` → çalışan partition `0.50.0` veya yedek `v0.50`.
+
+## Workspace
+
+VS Code / Cursor: `IOModule-v0-50.code-workspace`
+
+## Platform
+
+Panel ve API: `HexnetWorkspace/myhexnet` — OTA katalog sürümü ile `device.fw` eşleşmeli.
