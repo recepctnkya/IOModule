@@ -20,6 +20,7 @@
 #include "nvs_flash.h"
 #include "ota_manager.h"
 
+// For ADC monitoring
 static const char *TAG = "APP_MAIN";
 
 void app_main(void)
