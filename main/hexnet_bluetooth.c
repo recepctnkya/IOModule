@@ -971,6 +971,8 @@ void parse_configuration_data(cJSON* json) {
         numOfDims,
         hexnet_io_profile_motor_enabled(),
         hexnet_io_profile_rgb_enabled());
+        //restart esp
+        esp_restart();
     
 }
 

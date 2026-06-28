@@ -116,7 +116,11 @@ void hexnet_app_bringup_task(void *arg)
 
 
 
-    waveshare_twai_init();
+    esp_err_t can_init_ret = waveshare_twai_init();
+    if (can_init_ret == ESP_OK) {
+        vTaskDelay(pdMS_TO_TICKS(3000));
+        hexnet_canbus_send_saved_panel_config();
+    }
 
 
     xTaskCreate(send_frames_task, "can_tx", 4096, NULL, 5, NULL);

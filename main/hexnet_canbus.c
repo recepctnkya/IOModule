@@ -1,7 +1,8 @@
 #define LOG_LOCAL_LEVEL HEXNET_LOG_LEVEL_OTHER
 #include "hexnet_log.h"
 #include "hexnet_canbus.h" // Include the Waveshare TWAI port library
-#include "hexnet_nvs.h"
+#include "hexnet_io_profile.h"
+#include "esp_system.h"
 #include "stdio.h"
 #include "stdint.h"
 #include "string.h"
@@ -9,10 +10,12 @@ static bool driver_installed = false; // Driver installation status
 unsigned long previousMillis = 0;     // Will store last time a message was sent
 static uint32_t error_recovery_count = 0; // Error recovery counter
 static uint32_t last_successful_tx = 0;   // Last successful transmission timestamp
+static volatile bool panel_config_transfer_active = false;
 
 // Forward declarations
 static void check_and_recover_from_errors(void);
 static void monitor_can_health(void);
+static esp_err_t send_can_frame_checked(uint32_t id, const uint8_t *data);
 
 // TWAI timing configuration for 50 Kbits
 static const twai_timing_config_t t_config = TWAI_TIMING_CONFIG_500KBITS();
@@ -26,6 +29,15 @@ static const twai_general_config_t g_config = TWAI_GENERAL_CONFIG_DEFAULT(TX_GPI
 #define FRAME_1_ID 0x100
 #define FRAME_2_ID 0x200
 #define FRAME_3_ID 0x300
+#define PANEL_CFG_TOTALS_ID 0x400
+#define PANEL_CFG_OUTPUT_ID 0x401
+#define PANEL_CFG_SENSOR_ID 0x402
+#define PANEL_CFG_DIM_ID 0x403
+#define DISPLAY_RESET_CMD_ID 0x404
+#define PANEL_CFG_TX_DELAY_MS 500
+#define PANEL_CFG_ACK_TIMEOUT_MS 1000
+#define PANEL_CFG_ACK_POLL_MS 20
+#define IO_MODULE_RESTART_DELAY_MS 250
 uint8_t rgb_enable = 0; // Enable RGB output
 
 // Frame data
@@ -100,9 +112,8 @@ void populate_frame_3(uint8_t r, uint8_t g, uint8_t b) {
 
 
 
-// Function to send a CAN frame
-void send_can_frame(uint32_t id, uint8_t *data) {
-    twai_message_t message;
+static esp_err_t send_can_frame_checked(uint32_t id, const uint8_t *data) {
+    twai_message_t message = {0};
     message.identifier = id;
     message.rtr = 0;  // Data frame
     message.data_length_code = 8;  // Max CAN data length is 8 bytes
@@ -117,6 +128,253 @@ void send_can_frame(uint32_t id, uint8_t *data) {
     } else {
         last_successful_tx = esp_timer_get_time() / 1000; // Update successful TX timestamp
     }
+    return res;
+}
+
+static bool is_runtime_can_frame_id(uint32_t id)
+{
+    return id == FRAME_1_ID ||
+           id == FRAME_2_ID ||
+           id == FRAME_3_ID;
+}
+
+// Function to send a CAN frame
+void send_can_frame(uint32_t id, uint8_t *data) {
+    if (panel_config_transfer_active && is_runtime_can_frame_id(id)) {
+        return;
+    }
+    (void)send_can_frame_checked(id, data);
+}
+
+static bool is_panel_config_frame_id(uint32_t id)
+{
+    return id == PANEL_CFG_TOTALS_ID ||
+           id == PANEL_CFG_OUTPUT_ID ||
+           id == PANEL_CFG_SENSOR_ID ||
+           id == PANEL_CFG_DIM_ID ||
+           id == DISPLAY_RESET_CMD_ID;
+}
+
+static bool panel_config_ack_matches(const twai_message_t *message, uint32_t id, const uint8_t *data, uint8_t match_len)
+{
+    return message->identifier == id &&
+           message->rtr == 0 &&
+           message->data_length_code >= match_len &&
+           memcmp(message->data, data, match_len) == 0;
+}
+
+static void log_panel_config_ack(uint32_t id, const uint8_t *data, uint8_t match_len)
+{
+    if (id == PANEL_CFG_TOTALS_ID && match_len >= 3) {
+        printf(
+            "Received panel config totals - CAN ID: 0x%03X, Outputs: %u, Sensors: %u, Dims: %u\n",
+            (unsigned int)id,
+            data[0],
+            data[1],
+            data[2]);
+    } else if (id == DISPLAY_RESET_CMD_ID) {
+        printf("Received display reset frame - CAN ID: 0x%03X, Value: %u\n", (unsigned int)id, data[0]);
+    } else if (match_len >= 2) {
+        printf(
+            "Received panel config item - CAN ID: 0x%03X, Index: %u, Value: %u\n",
+            (unsigned int)id,
+            data[0],
+            data[1]);
+    }
+}
+
+static void log_panel_config_send(uint32_t id, const uint8_t *data, uint8_t match_len)
+{
+    if (id == PANEL_CFG_TOTALS_ID && match_len >= 3) {
+        printf(
+            "Sent panel config totals - CAN ID: 0x%03X, Outputs: %u, Sensors: %u, Dims: %u\n",
+            (unsigned int)id,
+            data[0],
+            data[1],
+            data[2]);
+    } else if (id == DISPLAY_RESET_CMD_ID) {
+        printf("Sent display reset frame - CAN ID: 0x%03X, Value: %u\n", (unsigned int)id, data[0]);
+    } else if (match_len >= 2) {
+        printf(
+            "Sent panel config item - CAN ID: 0x%03X, Index: %u, Value: %u\n",
+            (unsigned int)id,
+            data[0],
+            data[1]);
+    }
+}
+
+static void log_panel_config_ack_timeout(uint32_t id, const uint8_t *data, uint8_t match_len)
+{
+    if (id == DISPLAY_RESET_CMD_ID) {
+        ESP_LOGE(TAG, "Display reset ACK timeout after %d ms", PANEL_CFG_ACK_TIMEOUT_MS);
+    } else if (match_len >= 2) {
+        ESP_LOGE(
+            TAG,
+            "Panel config ACK timeout after %d ms - CAN ID: 0x%03X, Index: %u, Value: %u",
+            PANEL_CFG_ACK_TIMEOUT_MS,
+            (unsigned int)id,
+            data[0],
+            data[1]);
+    } else {
+        ESP_LOGE(TAG, "Panel config ACK timeout after %d ms - CAN ID: 0x%03X", PANEL_CFG_ACK_TIMEOUT_MS, (unsigned int)id);
+    }
+}
+
+static esp_err_t receive_panel_config_ack_once(uint32_t id, const uint8_t *data, uint8_t match_len, TickType_t wait_ticks)
+{
+    twai_message_t message;
+    esp_err_t err = twai_receive(&message, wait_ticks);
+    if (err == ESP_ERR_TIMEOUT) {
+        return err;
+    }
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Panel config ACK receive failed for CAN ID 0x%03X: 0x%x", (unsigned int)id, err);
+        return err;
+    }
+
+    if (panel_config_ack_matches(&message, id, data, match_len)) {
+        log_panel_config_ack(id, data, match_len);
+        return ESP_OK;
+    }
+
+    if (is_panel_config_frame_id(message.identifier)) {
+        ESP_LOGW(
+            TAG,
+            "Ignoring unexpected panel config feedback - expected CAN ID 0x%03X, received 0x%03X",
+            (unsigned int)id,
+            (unsigned int)message.identifier);
+        return ESP_ERR_TIMEOUT;
+    }
+
+    handle_rx_message(message);
+    return ESP_ERR_TIMEOUT;
+}
+
+static esp_err_t send_panel_config_frame_wait_ack(uint32_t id, const uint8_t *data, uint8_t match_len)
+{
+    const TickType_t timeout_ticks = pdMS_TO_TICKS(PANEL_CFG_ACK_TIMEOUT_MS);
+    const TickType_t resend_ticks = pdMS_TO_TICKS(PANEL_CFG_TX_DELAY_MS);
+    const TickType_t poll_ticks = pdMS_TO_TICKS(PANEL_CFG_ACK_POLL_MS);
+    const TickType_t deadline = xTaskGetTickCount() + timeout_ticks;
+    TickType_t next_send = xTaskGetTickCount();
+
+    while ((int32_t)(deadline - xTaskGetTickCount()) > 0) {
+        TickType_t now = xTaskGetTickCount();
+        if ((int32_t)(now - next_send) >= 0) {
+            esp_err_t err = send_can_frame_checked(id, data);
+            if (err != ESP_OK) {
+                return err;
+            }
+            log_panel_config_send(id, data, match_len);
+            next_send = now + resend_ticks;
+        }
+
+        now = xTaskGetTickCount();
+        if ((int32_t)(deadline - now) <= 0) {
+            break;
+        }
+
+        TickType_t wait_ticks = deadline - now;
+        if ((int32_t)(next_send - now) > 0 && (next_send - now) < wait_ticks) {
+            wait_ticks = next_send - now;
+        }
+        if (poll_ticks < wait_ticks) {
+            wait_ticks = poll_ticks;
+        }
+        if (wait_ticks == 0) {
+            wait_ticks = 1;
+        }
+
+        esp_err_t err = receive_panel_config_ack_once(id, data, match_len, wait_ticks);
+        if (err == ESP_OK) {
+            return ESP_OK;
+        }
+        if (err != ESP_ERR_TIMEOUT) {
+            return err;
+        }
+    }
+
+    log_panel_config_ack_timeout(id, data, match_len);
+    return ESP_ERR_TIMEOUT;
+}
+
+static esp_err_t send_panel_config_item(uint32_t id, uint8_t index, uint8_t value)
+{
+    uint8_t data[8] = {0};
+    data[0] = index;
+    data[1] = value;
+    return send_panel_config_frame_wait_ack(id, data, 2);
+}
+
+void hexnet_canbus_send_saved_panel_config(void)
+{
+    const hexnet_io_profile_t *profile = hexnet_io_profile_get();
+    if (!profile) {
+        ESP_LOGW(TAG, "Saved panel config send skipped: profile unavailable");
+        return;
+    }
+    if (panel_config_transfer_active) {
+        ESP_LOGW(TAG, "Saved panel config send skipped: transfer already active");
+        return;
+    }
+
+    ESP_LOGI(
+        TAG,
+        "Sending saved panel config to display O:%u S:%u D:%u",
+        (unsigned)profile->num_relays,
+        (unsigned)profile->num_sensors,
+        (unsigned)profile->num_dims);
+
+    panel_config_transfer_active = true;
+
+    uint8_t data[8] = {0};
+    data[0] = profile->num_relays;
+    data[1] = profile->num_sensors;
+    data[2] = profile->num_dims;
+    esp_err_t err = send_panel_config_frame_wait_ack(PANEL_CFG_TOTALS_ID, data, 3);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Saved panel config transfer aborted: totals ACK missing");
+        goto transfer_done;
+    }
+
+    for (uint8_t i = 0; i < profile->num_relays && i < HEXNET_IO_RELAY_SLOTS; ++i) {
+        uint8_t type = profile->relay_type[i];
+        err = send_panel_config_item(PANEL_CFG_OUTPUT_ID, (uint8_t)(i + 1), (type >= 1 && type <= 18) ? type : 1);
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "Saved panel config transfer aborted: output %u ACK missing", (unsigned)(i + 1));
+            goto transfer_done;
+        }
+    }
+
+    for (uint8_t i = 0; i < profile->num_sensors && i < HEXNET_IO_SENSOR_SLOTS; ++i) {
+        err = send_panel_config_item(PANEL_CFG_SENSOR_ID, (uint8_t)(i + 1), 1);
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "Saved panel config transfer aborted: sensor %u ACK missing", (unsigned)(i + 1));
+            goto transfer_done;
+        }
+    }
+
+    for (uint8_t i = 0; i < profile->num_dims && i < HEXNET_IO_DIM_SLOTS; ++i) {
+        uint8_t type = profile->dim_type[i];
+        err = send_panel_config_item(PANEL_CFG_DIM_ID, (uint8_t)(i + 1), (type >= 1 && type <= 8) ? type : 1);
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "Saved panel config transfer aborted: dim %u ACK missing", (unsigned)(i + 1));
+            goto transfer_done;
+        }
+    }
+
+    memset(data, 0, sizeof(data));
+    data[0] = 1;
+    err = send_panel_config_frame_wait_ack(DISPLAY_RESET_CMD_ID, data, 1);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Saved panel config transfer aborted: display reset ACK missing");
+        goto transfer_done;
+    }
+
+    ESP_LOGI(TAG, "Saved panel config transfer completed with display ACK");
+
+transfer_done:
+    panel_config_transfer_active = false;
 }
 
 
@@ -143,6 +401,11 @@ void update_water_levels_only(int waterlevel1, int waterlevel2) {
 void send_frames_task(void *arg) {
 
     while (1) {
+        if (panel_config_transfer_active) {
+            vTaskDelay(pdMS_TO_TICKS(PANEL_CFG_ACK_POLL_MS));
+            continue;
+        }
+
         // Populate the frames with custom data
         populate_frame_1(simvoltage, simoutputs, siminputs);  // Example: Voltage=1350, Outputs=0xFF00, Inputs=0xAA00
         populate_frame_2(analog_inputs, dimmable_outputs); // Example analog and dimmable output values
@@ -231,59 +494,21 @@ uint16_t get_voltage_value(void) {
 
 //############################ NVS FUNCTIONS #########################################################################
 // Function to save configuration data to NVS
-void save_panel_configuration_to_nvs_can(int totalOutps, uint8_t buffer1[16], int totalSensors, uint8_t buffer2[5], int totalDims, uint8_t buffer3[4]) {
-    // Ensure the values do not exceed the maximum allowed sizes
-    if (totalOutps > 16) {
-        totalOutps = 16;
+static esp_err_t save_panel_configuration_to_nvs_can(int totalOutps, uint8_t buffer1[16], int totalSensors, uint8_t buffer2[5], int totalDims, uint8_t buffer3[4]) {
+    esp_err_t err = hexnet_io_profile_apply_panel_config(
+        totalOutps,
+        buffer1,
+        totalSensors,
+        buffer2,
+        totalDims,
+        buffer3,
+        HEXNET_IO_LINK_DISPLAY);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "CAN panel config profile save failed: 0x%x", err);
+        return err;
     }
-    if (totalSensors > 5) {
-        totalSensors = 5;
-    }
-    if (totalDims > 4) {
-        totalDims = 4;
-    }
-
-    // Save totalOutps to NVS
-    nvs_write_int("numOfOutputs", totalOutps);
-
-    // Save buffer1 to NVS
-    for (int i = 0; i < 16; i++) {
-        if (buffer1[i] < 1 || buffer1[i] > 18) {
-            buffer1[i] = 1; // Set to default value if out of range
-        }
-        char key[16];
-        snprintf(key, sizeof(key), "outBuf%d", i);
-        nvs_write_int(key, buffer1[i]);
-    }
-
-    // Save totalSensors to NVS
-    nvs_write_int("numSens", totalSensors);
-
-    // Save buffer2 to NVS
-    for (int i = 0; i < 5; i++) {
-        if (buffer2[i] < 0 || buffer2[i] > 1) {
-            buffer2[i] = 0; // Set to default value if out of range
-        }
-        char key[16];
-        snprintf(key, sizeof(key), "sensBuf%d", i);
-        nvs_write_int(key, buffer2[i]);
-    }
-
-    // Save totalDims to NVS
-    nvs_write_int("numDims", totalDims);
-
-    // Save buffer3 to NVS
-    for (int i = 0; i < 4; i++) {
-        if (buffer3[i] < 0 || buffer3[i] > 8) {
-            buffer3[i] = 0; // Set to default value if out of range
-        }
-        char key[16];
-        snprintf(key, sizeof(key), "dimsBuf%d", i);
-        nvs_write_int(key, buffer3[i]);
-    }
-
-
-
+    ESP_LOGI(TAG, "CAN panel config saved to profile and legacy NVS");
+    return ESP_OK;
 }
 
 void handle_rx_message(twai_message_t message)
@@ -338,15 +563,21 @@ void handle_rx_message(twai_message_t message)
     // PANEL CONFIGURATION RX
     // ==========================
 
-    else if (message.identifier == 0x799 && message.data_length_code >= 3)
+    else if (message.identifier == PANEL_CFG_TOTALS_ID )
     {
-        totalOutps_config = message.data[0];
-        totalSensors_config = message.data[1];
-        totalDims_config = message.data[2];
-        ESP_LOGI(TAG, "CFG TOTALS O:%d S:%d D:%d", totalOutps_config, totalSensors_config, totalDims_config);
+        totalOutps_config = (message.data[0] > HEXNET_IO_RELAY_SLOTS) ? HEXNET_IO_RELAY_SLOTS : message.data[0];
+        totalSensors_config = (message.data[1] > HEXNET_IO_SENSOR_SLOTS) ? HEXNET_IO_SENSOR_SLOTS : message.data[1];
+        totalDims_config = (message.data[2] > HEXNET_IO_DIM_SLOTS) ? HEXNET_IO_DIM_SLOTS : message.data[2];
+        memset(output_config, 0, sizeof(output_config));
+        memset(sensor_config, 0, sizeof(sensor_config));
+        memset(dim_config, 0, sizeof(dim_config));
+        output_received_mask = 0;
+        sensor_received_mask = 0;
+        dim_received_mask = 0;
+        printf("CFG TOTALS O:%d S:%d D:%d\n", totalOutps_config, totalSensors_config, totalDims_config);
     }
 
-    else if (message.identifier == 0x800  && message.data_length_code >= 2)
+    else if (message.identifier == PANEL_CFG_OUTPUT_ID  )
     {
         uint8_t index = message.data[0];
         uint8_t value = message.data[1];
@@ -360,7 +591,7 @@ void handle_rx_message(twai_message_t message)
         printf("CFG Output[%d] = %d\n", index - 1, value);
     }
 
-    else if (message.identifier == 0x801  && message.data_length_code >= 2)
+    else if (message.identifier == PANEL_CFG_SENSOR_ID  )
     {
         uint8_t index = message.data[0];
         uint8_t value = message.data[1];
@@ -373,7 +604,7 @@ void handle_rx_message(twai_message_t message)
         printf("CFG Sensor[%d] = %d\n", index - 1, value);
     }
 
-    else if (message.identifier == 0x802  && message.data_length_code >= 2)
+    else if (message.identifier == PANEL_CFG_DIM_ID  )
     {
         uint8_t index = message.data[0];
         uint8_t value = message.data[1];
@@ -384,8 +615,12 @@ void handle_rx_message(twai_message_t message)
             dim_received_mask |= (1 << (index - 1));
             if(index == totalDims_config) {
                 printf("All dim configs received. Output config mask:\n");
-                //save to nvs
-                save_panel_configuration_to_nvs_can(totalOutps_config, output_config, totalSensors_config, sensor_config, totalDims_config, dim_config);
+                esp_err_t err = save_panel_configuration_to_nvs_can(totalOutps_config, output_config, totalSensors_config, sensor_config, totalDims_config, dim_config);
+                if (err == ESP_OK) {
+                    ESP_LOGW(TAG, "Panel config complete; restarting IO module");
+                    vTaskDelay(pdMS_TO_TICKS(IO_MODULE_RESTART_DELAY_MS));
+                    esp_restart();
+                }
             }
         }
         printf("CFG Dim[%d] = %d\n", index - 1, value);
@@ -529,7 +764,9 @@ void receive_frames_task(void *pvParameter)
                 while (twai_receive(&message, 0) == ESP_OK) {
                     cleared_count++;
                     // Process the message if it's important, otherwise discard
-                    if (message.identifier == 0x720 || message.identifier == 0x730 || message.identifier == 0x740 || message.identifier == 0x800 || message.identifier == 0x801 || message.identifier == 0x802) {
+                    if (message.identifier == 0x720 || message.identifier == 0x730 || message.identifier == 0x740 ||
+                        message.identifier == PANEL_CFG_TOTALS_ID || message.identifier == PANEL_CFG_OUTPUT_ID ||
+                        message.identifier == PANEL_CFG_SENSOR_ID || message.identifier == PANEL_CFG_DIM_ID) {
                         handle_rx_message(message);
                     }
                 }
@@ -559,7 +796,9 @@ void receive_frames_task(void *pvParameter)
             int cleared_count = 0;
             while (twai_receive(&message, 0) == ESP_OK && cleared_count < 5) { // Clear up to 5 messages
                 cleared_count++;
-                if (message.identifier == 0x720 || message.identifier == 0x730 || message.identifier == 0x740 || message.identifier == 0x800 || message.identifier == 0x801 || message.identifier == 0x802) {
+                if (message.identifier == 0x720 || message.identifier == 0x730 || message.identifier == 0x740 ||
+                    message.identifier == PANEL_CFG_TOTALS_ID || message.identifier == PANEL_CFG_OUTPUT_ID ||
+                    message.identifier == PANEL_CFG_SENSOR_ID || message.identifier == PANEL_CFG_DIM_ID) {
                     handle_rx_message(message);
                 }
             }
@@ -576,6 +815,10 @@ void receive_frames_task(void *pvParameter)
 // Function to send a message
 static void send_message()
 {
+    if (panel_config_transfer_active) {
+        return;
+    }
+
     // Configure message to transmit
     twai_message_t message;       // Message structure
     message.identifier = 0x0F6;   // Message identifier

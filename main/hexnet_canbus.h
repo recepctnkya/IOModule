@@ -32,6 +32,7 @@ esp_err_t waveshare_twai_transmit(); // Transmit data via TWAI
 void send_frames_task(void *arg);    // Task to send frames via TWAI
 void receive_frames_task(void *pvParameter); // Task to receive frames via TWAI
 void send_can_frame(uint32_t id, uint8_t *data); // Send a CAN frame via TWAI
+void hexnet_canbus_send_saved_panel_config(void); // Send saved panel config to display
 void populate_frame_2(uint8_t analog_inputs[4], uint8_t dimmable_outputs[4]); // Populate frame 2 data
 void populate_frame_3(uint8_t r, uint8_t g, uint8_t b); // Populate frame 3 data
 void populate_frame_1(uint16_t voltage, uint16_t outputs, uint16_t inputs); // Populate frame 1 data

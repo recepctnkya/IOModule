@@ -321,6 +321,76 @@ esp_err_t hexnet_io_profile_save(void)
     return err;
 }
 
+static int clamp_panel_count(int value, int max_value)
+{
+    if (value < 0) {
+        return 0;
+    }
+    if (value > max_value) {
+        return max_value;
+    }
+    return value;
+}
+
+esp_err_t hexnet_io_profile_apply_panel_config(
+    int totalOutps,
+    const uint8_t output_types[HEXNET_IO_RELAY_SLOTS],
+    int totalSensors,
+    const uint8_t sensor_types[HEXNET_IO_SENSOR_SLOTS],
+    int totalDims,
+    const uint8_t dim_types[HEXNET_IO_DIM_SLOTS],
+    uint8_t link_flag)
+{
+    if (!s_loaded) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    const int relay_count = clamp_panel_count(totalOutps, HEXNET_IO_RELAY_SLOTS);
+    const int sensor_count = clamp_panel_count(totalSensors, HEXNET_IO_SENSOR_SLOTS);
+    const int dim_count = clamp_panel_count(totalDims, HEXNET_IO_DIM_SLOTS);
+
+    s_profile.relay_enable_mask = (uint16_t)((relay_count > 0) ? ((1u << relay_count) - 1u) : 0);
+    for (int i = 0; i < HEXNET_IO_RELAY_SLOTS; ++i) {
+        if (i < relay_count) {
+            uint8_t type = output_types ? output_types[i] : 1;
+            s_profile.relay_type[i] = (type >= 1 && type <= 18) ? type : 1;
+        } else {
+            s_profile.relay_type[i] = 0;
+        }
+    }
+
+    s_profile.sensor_enable_mask = (uint8_t)((sensor_count > 0) ? ((1u << sensor_count) - 1u) : 0);
+    s_profile.tank_enable_mask = 0;
+    for (int i = 0; i < HEXNET_IO_SENSOR_SLOTS; ++i) {
+        if (i < sensor_count) {
+            uint8_t type = sensor_types ? sensor_types[i] : 1;
+            s_profile.sensor_type[i] = (type == 1) ? type : 1;
+            if (i >= 2 && (i - 2) < HEXNET_IO_TANK_SLOTS) {
+                s_profile.tank_enable_mask |= (uint8_t)(1u << (i - 2));
+            }
+        } else {
+            s_profile.sensor_type[i] = 0;
+        }
+    }
+
+    s_profile.dim_enable_mask = (uint8_t)((dim_count > 0) ? ((1u << dim_count) - 1u) : 0);
+    for (int i = 0; i < HEXNET_IO_DIM_SLOTS; ++i) {
+        if (i < dim_count) {
+            uint8_t type = dim_types ? dim_types[i] : 1;
+            s_profile.dim_type[i] = (type >= 1 && type <= 8) ? type : 1;
+        } else {
+            s_profile.dim_type[i] = 0;
+        }
+    }
+
+    if (link_flag) {
+        s_profile.link_flags |= link_flag;
+    }
+
+    profile_recompute_counts(&s_profile);
+    return hexnet_io_profile_save();
+}
+
 static int json_bool(const cJSON *item, int default_val)
 {
     if (!item) {

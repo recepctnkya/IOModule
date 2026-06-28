@@ -42,6 +42,16 @@ esp_err_t hexnet_io_profile_save(void);
 /** BLE Configuration JSON veya platform io_config_set. */
 esp_err_t hexnet_io_profile_apply_json(const cJSON *json, uint8_t link_flag);
 
+/** Legacy/CAN panel config bufferlarini profile kaydina uygula. */
+esp_err_t hexnet_io_profile_apply_panel_config(
+    int totalOutps,
+    const uint8_t output_types[HEXNET_IO_RELAY_SLOTS],
+    int totalSensors,
+    const uint8_t sensor_types[HEXNET_IO_SENSOR_SLOTS],
+    int totalDims,
+    const uint8_t dim_types[HEXNET_IO_DIM_SLOTS],
+    uint8_t link_flag);
+
 void hexnet_io_profile_append_to_json(cJSON *parent, const char *object_name);
 
 bool hexnet_io_profile_relay_slot_enabled(uint8_t index);
